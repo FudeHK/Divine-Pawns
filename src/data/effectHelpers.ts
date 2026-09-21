@@ -11,6 +11,7 @@ import type { EffectDef, StatKey, TargetSpec } from '../engine/types';
 export function perAdjacentAlly(
   idBase: string,
   name: string,
+  summary: string,
   stat: StatKey,
   valuePerAlly: number,
   target: TargetSpec = 'self',
@@ -20,6 +21,7 @@ export function perAdjacentAlly(
     out.push({
       id: `${idBase}_${n}`,
       name: `${name}(${n})`,
+      summary,
       trigger: { kind: 'always' },
       conditions: [{ kind: 'adjacentAllies', min: n }],
       effects: [{ kind: 'statMod', target, stat, mode: 'pct', value: valuePerAlly }],

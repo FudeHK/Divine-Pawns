@@ -22,6 +22,7 @@ const raw: BlessingDef[] = [
       {
         id: 'bl_inferno_e',
         name: '業火の加護',
+        summary: '燃焼の威力を大きく引き上げる',
         trigger: { kind: 'always' },
         effects: [{ kind: 'globalMod', key: 'burnCoefMul', mode: 'mul', value: 2 }],
       },

@@ -159,9 +159,12 @@ export const zEffect = z.discriminatedUnion('kind', [
   }),
 ]);
 
+export const zShortName = z.string().min(1).max(4);
+
 export const zEffectDef: z.ZodType<EffectDef> = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  summary: z.string().min(1).max(40),
   trigger: zTrigger,
   conditions: z.array(zCondition).optional(),
   effects: z.array(zEffect).min(1),
@@ -171,6 +174,7 @@ export const zEffectDef: z.ZodType<EffectDef> = z.object({
 export const zCharacterDef: z.ZodType<CharacterDef> = z.object({
   id: z.string().regex(/^[A-Z]{3}_[A-Z]$/),
   name: z.string().min(1),
+  shortName: zShortName,
   myth: zMyth,
   role: zRole,
   element: zElement,
@@ -184,6 +188,7 @@ export const zCharacterDef: z.ZodType<CharacterDef> = z.object({
 export const zEnemyDef: z.ZodType<EnemyDef> = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  shortName: zShortName,
   role: zRole,
   element: zElement,
   base: zStats,

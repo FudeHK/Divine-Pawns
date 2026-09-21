@@ -126,6 +126,7 @@ function applierEffect(debuff: DebuffKind, stacks: number): EffectDef {
   return {
     id: `test_${debuff}`,
     name: `テスト${debuff}`,
+    summary: `テスト用に${debuff}を付与する`,
     trigger: { kind: 'battleStart' },
     effects: [{ kind: 'applyDebuff', target: 'allEnemies', debuff, stacks }],
   };
@@ -230,6 +231,7 @@ describe('戦闘ループの中のデバフ', () => {
     const skill: EffectDef = {
       id: 'test_skill',
       name: 'テストスキル',
+      summary: 'テスト用に単体へダメージ',
       trigger: { kind: 'onSkill' },
       effects: [{ kind: 'damage', target: 'current', amount: { stat: 'atk', coef: 1 } }],
     };

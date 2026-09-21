@@ -23,7 +23,13 @@ const raw: EquipmentDef[] = [
     id: 'eq_synergy',
     name: '連携の紋章',
     desc: '隣接する味方1体につき攻撃速度 +5%',
-    effects: perAdjacentAlly('eq_synergy_e', '連携の紋章', 'atkSpeed', 0.05),
+    effects: perAdjacentAlly(
+      'eq_synergy_e',
+      '連携の紋章',
+      '隣にいる味方の数だけ攻撃速度が上がる',
+      'atkSpeed',
+      0.05,
+    ),
   },
 ];
 

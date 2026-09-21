@@ -246,6 +246,8 @@ export type Effect =
 export interface EffectDef {
   id: string;
   name: string;
+  /** 画面に出す短い説明文（20字程度・倍率や係数は書かない） */
+  summary: string;
   trigger: Trigger;
   conditions?: Condition[];
   effects: Effect[];
@@ -260,6 +262,8 @@ export interface EffectDef {
 export interface CharacterDef {
   id: string;
   name: string;
+  /** 盤面アイコンに出す短い名前（最大4文字） */
+  shortName: string;
   myth: Myth;
   role: Role;
   element: Element;
@@ -276,6 +280,8 @@ export interface CharacterDef {
 export interface EnemyDef {
   id: string;
   name: string;
+  /** 盤面アイコンに出す短い名前（最大4文字） */
+  shortName: string;
   role: Role;
   element: Element;
   base: Stats;

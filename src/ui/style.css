@@ -260,3 +260,75 @@ select {
   flex-wrap: wrap;
   margin-top: 4px;
 }
+
+/* --- 詳細パネル --- */
+.detail {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.detail-title {
+  font-size: 13px;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 4.8em 1fr 4.8em 1fr;
+  gap: 2px 6px;
+  margin: 6px 0;
+  font-size: 11px;
+}
+
+.detail-grid .dk {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.detail-grid .dv {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+  padding: 2px 0;
+  border-top: 1px solid var(--line);
+}
+
+.skill-label {
+  color: var(--muted);
+  width: 5.6em;
+  flex: 0 0 auto;
+}
+
+.skill-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.unit-line {
+  cursor: pointer;
+  padding: 1px 0;
+}

@@ -1,6 +1,7 @@
 /**
  * フェーズ1の検証用の最小画面。
  * 縦画面（幅360〜430px）で、遭遇を選ぶ → 前衛／サポートに割り当てる → 配置 → 開始 → 再生。
+ * 盤面アイコンをタップすると詳細パネルが開く。
  */
 
 import './style.css';
@@ -9,11 +10,23 @@ import { BLESSINGS } from '../data/blessings';
 import { CHARACTERS, getCharacter } from '../data/characters';
 import { ENCOUNTERS, getEncounter } from '../data/encounters';
 import { getEnemy } from '../data/enemies';
-import { EQUIPMENT } from '../data/equipment';
-import { buildBattleSetup } from '../engine/build';
+import { EQUIPMENT, getEquipment } from '../data/equipment';
+import { buildBattleSetup, resolveMembers } from '../engine/build';
 import { DEFAULT_CONFIG } from '../engine/config';
 import { ALLY_CELLS, ALL_CELLS, isCellOfSide } from '../engine/hex';
-import type { DebuffKind, Element, Hex, Loadout, Star } from '../engine/types';
+import type {
+  CharacterDef,
+  DebuffKind,
+  EffectDef,
+  Element,
+  EnemyDef,
+  Hex,
+  Loadout,
+  Myth,
+  Role,
+  Star,
+  Stats,
+} from '../engine/types';
 import { formatNumber } from '../util/format';
 import { buildReplay, type Replay } from './replay';
 
@@ -30,6 +43,15 @@ interface Assignment {
   pos: Hex | null;
 }
 
+/** 詳細パネルで見せる対象 */
+type DetailTarget =
+  /** 準備中のキャラ（味方） */
+  | { kind: 'char'; charId: string }
+  /** 準備中の敵（遭遇の何番目か） */
+  | { kind: 'enemySlot'; index: number }
+  /** 再生中の盤上ユニット */
+  | { kind: 'unit'; unitId: string };
+
 const team = DEFAULT_CONFIG.team;
 
 const state = {
@@ -43,6 +65,9 @@ const state = {
   frame: 0,
   playing: false,
   speed: 1 as 1 | 2 | 4,
+  detail: null as DetailTarget | null,
+  /** 詳細を開く直前に再生中だったか */
+  resumeAfterDetail: false,
 };
 
 for (const c of CHARACTERS) {
@@ -68,7 +93,7 @@ const ELEMENT_LABEL: Record<Element, string> = {
   wood: '木',
   lightning: '雷',
 };
-const ROLE_LABEL: Record<string, string> = {
+const ROLE_LABEL: Record<Role, string> = {
   tank: 'タンク',
   melee: '近接',
   ranged: '遠隔',
@@ -76,11 +101,23 @@ const ROLE_LABEL: Record<string, string> = {
   healer: 'ヒーラー',
   support: 'サポーター',
 };
+const MYTH_LABEL: Record<Myth, string> = {
+  greek: 'ギリシャ',
+  norse: '北欧',
+  japanese: '日本',
+  egyptian: 'エジプト',
+};
 const DEBUFF_LABEL: Record<DebuffKind, string> = {
   burn: '燃',
   frostbite: '凍',
   poison: '毒',
   paralysis: '麻',
+};
+const DEBUFF_FULL: Record<DebuffKind, string> = {
+  burn: '燃焼',
+  frostbite: '凍傷',
+  poison: '猛毒',
+  paralysis: '麻痺',
 };
 const DEBUFF_COLOR: Record<DebuffKind, string> = {
   burn: '#ff7a45',
@@ -88,6 +125,41 @@ const DEBUFF_COLOR: Record<DebuffKind, string> = {
   poison: '#7ed957',
   paralysis: '#d29bff',
 };
+const DEBUFF_ORDER: DebuffKind[] = ['burn', 'frostbite', 'poison', 'paralysis'];
+
+// ---------------------------------------------------------------------------
+// 参照ヘルパー
+// ---------------------------------------------------------------------------
+
+function charOf(defId: string): CharacterDef | null {
+  return CHARACTERS.find((c) => c.id === defId) ?? null;
+}
+
+function enemyOf(defId: string): EnemyDef | null {
+  try {
+    return getEnemy(defId);
+  } catch {
+    return null;
+  }
+}
+
+function shortNameOf(defId: string): string {
+  return charOf(defId)?.shortName ?? enemyOf(defId)?.shortName ?? defId.slice(0, 4);
+}
+
+/** 準備中の敵について、同じ種類が複数いる時の通し番号 */
+function enemyDupIndexes(): (number | null)[] {
+  const units = getEncounter(state.encounterId).units;
+  const counts = new Map<string, number>();
+  for (const u of units) counts.set(u.enemyId, (counts.get(u.enemyId) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return units.map((u) => {
+    if ((counts.get(u.enemyId) ?? 0) <= 1) return null;
+    const n = (seen.get(u.enemyId) ?? 0) + 1;
+    seen.set(u.enemyId, n);
+    return n;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // 編成の組み立て
@@ -166,7 +238,9 @@ function hexPoints(cx: number, cy: number, r: number): string {
   const pts: string[] = [];
   for (let i = 0; i < 6; i++) {
     const a = (Math.PI / 180) * (60 * i - 90);
-    pts.push(`${(cx + r * Math.sin(a + Math.PI / 2)).toFixed(2)},${(cy - r * Math.cos(a + Math.PI / 2)).toFixed(2)}`);
+    pts.push(
+      `${(cx + r * Math.sin(a + Math.PI / 2)).toFixed(2)},${(cy - r * Math.cos(a + Math.PI / 2)).toFixed(2)}`,
+    );
   }
   return pts.join(' ');
 }
@@ -176,6 +250,76 @@ function el(tag: string, attrs: Record<string, string | number> = {}, text?: str
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
   if (text !== undefined) n.textContent = text;
   return n;
+}
+
+/** アイコン（円＋短い名前＋必要なら通し番号）を描く */
+function drawToken(
+  svg: SVGSVGElement,
+  cx: number,
+  cy: number,
+  label: string,
+  color: string,
+  opts: {
+    star?: Star | null;
+    dupIndex?: number | null;
+    onTap?: () => void;
+  } = {},
+): void {
+  const g = el('g');
+  if (opts.onTap) {
+    g.setAttribute('style', 'cursor:pointer');
+    g.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      opts.onTap!();
+    });
+  }
+  g.appendChild(el('circle', { cx, cy, r: R * 0.68, fill: color, opacity: 0.94 }));
+  // 4文字でも読めるように文字幅を詰める
+  const fontSize = label.length >= 4 ? 3.5 : label.length === 3 ? 4.1 : 4.8;
+  g.appendChild(
+    el(
+      'text',
+      {
+        x: cx,
+        y: cy + 1.4,
+        'text-anchor': 'middle',
+        'font-size': fontSize,
+        fill: '#0b1119',
+        'font-weight': 700,
+      },
+      label,
+    ),
+  );
+  if (opts.star) {
+    g.appendChild(
+      el(
+        'text',
+        { x: cx, y: cy + 6.4, 'text-anchor': 'middle', 'font-size': 3.2, fill: '#0b1119' },
+        `★${opts.star}`,
+      ),
+    );
+  }
+  if (opts.dupIndex) {
+    // アイコンの右下の隅に小さく番号
+    g.appendChild(
+      el('circle', { cx: cx + R * 0.52, cy: cy + R * 0.52, r: 2.4, fill: '#0b1119', opacity: 0.9 }),
+    );
+    g.appendChild(
+      el(
+        'text',
+        {
+          x: cx + R * 0.52,
+          y: cy + R * 0.52 + 1.2,
+          'text-anchor': 'middle',
+          'font-size': 3.2,
+          fill: '#ffffff',
+          'font-weight': 700,
+        },
+        String(opts.dupIndex),
+      ),
+    );
+  }
+  svg.appendChild(g);
 }
 
 function renderBoard(): SVGSVGElement {
@@ -205,56 +349,30 @@ function renderBoard(): SVGSVGElement {
   }
 
   if (!rep) {
-    // 編成中：配置済みの前衛を表示
+    // 準備中：配置済みの前衛
     for (const c of CHARACTERS) {
       const a = state.assign.get(c.id)!;
       if (a.slot !== 'frontline' || !a.pos) continue;
       const { cx, cy } = hexCenter(a.pos);
-      svg.appendChild(
-        el('circle', { cx, cy, r: R * 0.62, fill: '#4aa3ff', opacity: 0.9 }),
-      );
-      svg.appendChild(
-        el(
-          'text',
-          {
-            x: cx,
-            y: cy + 1.6,
-            'text-anchor': 'middle',
-            'font-size': 4.6,
-            fill: '#06121f',
-            'font-weight': 700,
-          },
-          c.id.slice(0, 3),
-        ),
-      );
-      svg.appendChild(
-        el(
-          'text',
-          { x: cx, y: cy + 6.5, 'text-anchor': 'middle', 'font-size': 3.4, fill: '#cfe4ff' },
-          `★${a.star}`,
-        ),
-      );
+      const cell = a.pos;
+      drawToken(svg, cx, cy, c.shortName, '#4aa3ff', {
+        star: a.star,
+        onTap: () => {
+          // 配置中（キャラ選択中）はタップで配置、そうでなければ詳細を開く
+          if (state.selected) onCellTap(cell);
+          else openDetail({ kind: 'char', charId: c.id });
+        },
+      });
     }
     // 敵の下見
-    for (const eu of getEncounter(state.encounterId).units) {
+    const dup = enemyDupIndexes();
+    getEncounter(state.encounterId).units.forEach((eu, i) => {
       const { cx, cy } = hexCenter(eu.pos);
-      const def = getEnemy(eu.enemyId);
-      svg.appendChild(el('circle', { cx, cy, r: R * 0.62, fill: '#ff6b6b', opacity: 0.85 }));
-      svg.appendChild(
-        el(
-          'text',
-          {
-            x: cx,
-            y: cy + 1.6,
-            'text-anchor': 'middle',
-            'font-size': 3.6,
-            fill: '#2a0b0b',
-            'font-weight': 700,
-          },
-          def.name.slice(0, 3),
-        ),
-      );
-    }
+      drawToken(svg, cx, cy, getEnemy(eu.enemyId).shortName, '#ff6b6b', {
+        dupIndex: dup[i] ?? null,
+        onTap: () => openDetail({ kind: 'enemySlot', index: i }),
+      });
+    });
     return svg;
   }
 
@@ -265,32 +383,22 @@ function renderBoard(): SVGSVGElement {
     if (!u.onField || !uf.alive) continue;
     const { cx, cy } = hexCenter(uf.pos);
     const color = u.side === 'ally' ? '#4aa3ff' : '#ff6b6b';
-    svg.appendChild(el('circle', { cx, cy, r: R * 0.6, fill: color, opacity: 0.92 }));
-    svg.appendChild(
-      el(
-        'text',
-        {
-          x: cx,
-          y: cy + 1.3,
-          'text-anchor': 'middle',
-          'font-size': 3.6,
-          fill: '#0b1119',
-          'font-weight': 700,
-        },
-        u.side === 'ally' ? u.defId.slice(0, 5) : u.name.slice(0, 3),
-      ),
-    );
+    drawToken(svg, cx, cy, shortNameOf(u.defId), color, {
+      star: u.side === 'ally' ? u.star : null,
+      dupIndex: u.dupIndex,
+      onTap: () => openDetail({ kind: 'unit', unitId: u.id }),
+    });
 
     // HP バー
     const bw = R * 1.3;
     const hpRatio = Math.max(0, Math.min(1, uf.hp / u.maxHp));
     svg.appendChild(
-      el('rect', { x: cx - bw / 2, y: cy - R * 0.95, width: bw, height: 1.5, fill: '#000', opacity: 0.6, rx: 0.5 }),
+      el('rect', { x: cx - bw / 2, y: cy - R * 0.98, width: bw, height: 1.5, fill: '#000', opacity: 0.6, rx: 0.5 }),
     );
     svg.appendChild(
       el('rect', {
         x: cx - bw / 2,
-        y: cy - R * 0.95,
+        y: cy - R * 0.98,
         width: bw * hpRatio,
         height: 1.5,
         fill: u.side === 'ally' ? '#57d9a3' : '#ff8f6b',
@@ -302,7 +410,7 @@ function renderBoard(): SVGSVGElement {
       svg.appendChild(
         el('rect', {
           x: cx - bw / 2,
-          y: cy - R * 0.95,
+          y: cy - R * 0.98,
           width: bw * sr,
           height: 1.5,
           fill: '#e6edf7',
@@ -314,12 +422,12 @@ function renderBoard(): SVGSVGElement {
     // マナ バー
     const manaRatio = Math.max(0, Math.min(1, uf.mana / u.maxMana));
     svg.appendChild(
-      el('rect', { x: cx - bw / 2, y: cy - R * 0.95 + 1.8, width: bw, height: 1, fill: '#000', opacity: 0.6, rx: 0.4 }),
+      el('rect', { x: cx - bw / 2, y: cy - R * 0.98 + 1.8, width: bw, height: 1, fill: '#000', opacity: 0.6, rx: 0.4 }),
     );
     svg.appendChild(
       el('rect', {
         x: cx - bw / 2,
-        y: cy - R * 0.95 + 1.8,
+        y: cy - R * 0.98 + 1.8,
         width: bw * manaRatio,
         height: 1,
         fill: '#7fb6ff',
@@ -329,19 +437,13 @@ function renderBoard(): SVGSVGElement {
 
     // デバフのストック数
     let dx = cx - bw / 2;
-    for (const k of ['burn', 'frostbite', 'poison', 'paralysis'] as DebuffKind[]) {
+    for (const k of DEBUFF_ORDER) {
       const v = uf.debuffs[k];
       if (v <= 0) continue;
       svg.appendChild(
         el(
           'text',
-          {
-            x: dx,
-            y: cy + R * 0.95,
-            'font-size': 3,
-            fill: DEBUFF_COLOR[k],
-            'font-weight': 700,
-          },
+          { x: dx, y: cy + R * 0.98, 'font-size': 3, fill: DEBUFF_COLOR[k], 'font-weight': 700 },
           `${DEBUFF_LABEL[k]}${formatNumber(v)}`,
         ),
       );
@@ -390,27 +492,20 @@ function renderBoard(): SVGSVGElement {
 function onCellTap(cell: Hex): void {
   if (!state.selected) {
     const occ = occupiedBy(cell);
-    if (occ) {
-      state.selected = occ;
-      state.message = `${getCharacter(occ).name} を選択中。置きたいマスをタップ`;
-    } else {
-      state.message = '先にキャラを選んでください';
-    }
+    if (occ) openDetail({ kind: 'char', charId: occ });
+    else state.message = '先にキャラを選んでください';
     render();
     return;
   }
   const a = state.assign.get(state.selected)!;
-  if (a.slot !== 'frontline') {
-    a.slot = 'frontline';
-  }
+  if (a.slot !== 'frontline') a.slot = 'frontline';
   const occ = occupiedBy(cell);
   if (occ && occ !== state.selected) {
-    // 入れ替え
     const other = state.assign.get(occ)!;
     other.pos = a.pos;
   }
   a.pos = { ...cell };
-  state.message = `${getCharacter(state.selected).name} を (${cell.x},${cell.y}) に配置`;
+  state.message = `${getCharacter(state.selected).shortName} を (${cell.x},${cell.y}) に配置`;
   state.selected = null;
   render();
 }
@@ -442,6 +537,23 @@ function setSlot(charId: string, slot: Slot): void {
   render();
 }
 
+/** 詳細パネルを開く（再生中なら一時停止する） */
+function openDetail(target: DetailTarget): void {
+  state.resumeAfterDetail = state.playing;
+  state.playing = false;
+  state.detail = target;
+  state.message = '';
+  render();
+}
+
+/** 詳細パネルを閉じる（開く前に再生中だったら再開する） */
+function closeDetail(): void {
+  state.detail = null;
+  if (state.replay && state.resumeAfterDetail) state.playing = true;
+  state.resumeAfterDetail = false;
+  render();
+}
+
 function startBattle(): void {
   const err = validateLoadout();
   if (err) {
@@ -457,6 +569,8 @@ function startBattle(): void {
   state.replay = buildReplay(setup);
   state.frame = 0;
   state.playing = true;
+  state.detail = null;
+  state.resumeAfterDetail = false;
   state.message = '';
   render();
 }
@@ -465,7 +579,197 @@ function backToSetup(): void {
   state.replay = null;
   state.playing = false;
   state.frame = 0;
+  state.detail = null;
+  state.resumeAfterDetail = false;
   render();
+}
+
+// ---------------------------------------------------------------------------
+// 詳細パネル
+// ---------------------------------------------------------------------------
+
+interface DetailView {
+  title: string;
+  tags: { text: string; cls?: string }[];
+  rows: [string, string][];
+  skills: { label: string; text: string }[];
+}
+
+function statRows(s: Stats, hpNow: number | null, manaNow: number | null): [string, string][] {
+  return [
+    ['HP', hpNow === null ? formatNumber(s.maxHp) : `${formatNumber(hpNow)} / ${formatNumber(s.maxHp)}`],
+    ['攻撃力', formatNumber(s.atk)],
+    ['防御', formatNumber(s.def)],
+    ['攻撃速度', `${s.atkSpeed.toFixed(2)} 回/秒`],
+    ['射程', `${formatNumber(s.range)} マス`],
+    ['マナ', manaNow === null ? formatNumber(s.maxMana) : `${formatNumber(manaNow)} / ${formatNumber(s.maxMana)}`],
+  ];
+}
+
+/** 同じ説明文はまとめて1行にする（隣接段階などは重複するため） */
+function summaryLine(defs: readonly EffectDef[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of defs) {
+    if (seen.has(d.summary)) continue;
+    seen.add(d.summary);
+    out.push(d.summary);
+  }
+  return out.length > 0 ? out.join(' ／ ') : '—';
+}
+
+function charSkills(c: CharacterDef): DetailView['skills'] {
+  return [
+    { label: 'アクティブ', text: c.active.summary },
+    { label: 'パッシブ', text: summaryLine(c.passives) },
+    { label: 'サポート効果', text: summaryLine(c.support) },
+  ];
+}
+
+function enemySkills(e: EnemyDef): DetailView['skills'] {
+  return [
+    { label: 'アクティブ', text: e.active ? e.active.summary : '—' },
+    { label: 'パッシブ', text: summaryLine(e.passives ?? []) },
+    { label: 'サポート効果', text: '—' },
+  ];
+}
+
+function equipmentLabel(equipId: string): string {
+  return equipId ? getEquipment(equipId).name : 'なし';
+}
+
+function debuffRow(debuffs: Record<DebuffKind, number>): string {
+  const parts = DEBUFF_ORDER.filter((k) => debuffs[k] > 0).map(
+    (k) => `${DEBUFF_FULL[k]} ${formatNumber(debuffs[k])}`,
+  );
+  return parts.length > 0 ? parts.join('・') : 'なし';
+}
+
+function buildDetailView(target: DetailTarget): DetailView | null {
+  if (target.kind === 'char') {
+    const c = getCharacter(target.charId);
+    const a = state.assign.get(c.id)!;
+    // 装備・加護込みの最終ステータス（編成に入っていれば編成込みで計算する）
+    let stats: Stats = c.base;
+    const members = a.slot === 'none' ? [] : resolveMembers(currentLoadout());
+    const m = members.find((x) => x.entry.charId === c.id);
+    if (m) stats = m.stats;
+    else {
+      stats = resolveMembers({
+        frontline: [{ charId: c.id, star: a.star, equipment: a.equipment ? [a.equipment] : [], pos: { x: 2, y: 3 } }],
+        support: [],
+        blessings: [],
+      })[0]!.stats;
+    }
+    return {
+      title: `${c.shortName}（${c.name}）`,
+      tags: [
+        { text: ROLE_LABEL[c.role] },
+        { text: ELEMENT_LABEL[c.element], cls: `el-${c.element}` },
+        { text: MYTH_LABEL[c.myth] },
+        { text: `★${a.star}` },
+      ],
+      rows: [
+        ...statRows(stats, null, null),
+        ['装備', equipmentLabel(a.equipment)],
+        ['枠', a.slot === 'frontline' ? '前衛' : a.slot === 'support' ? 'サポート' : '未編成'],
+      ],
+      skills: charSkills(c),
+    };
+  }
+
+  if (target.kind === 'enemySlot') {
+    const units = getEncounter(state.encounterId).units;
+    const eu = units[target.index];
+    if (!eu) return null;
+    const def = getEnemy(eu.enemyId);
+    const scale = eu.scale ?? 1;
+    const stats: Stats = { ...def.base, maxHp: def.base.maxHp * scale, atk: def.base.atk * scale };
+    const dup = enemyDupIndexes()[target.index];
+    return {
+      title: `${def.shortName}${dup ? ` ${dup}` : ''}（${def.name}）`,
+      tags: [
+        { text: ROLE_LABEL[def.role] },
+        { text: ELEMENT_LABEL[def.element], cls: `el-${def.element}` },
+        { text: '敵' },
+        ...(def.isBoss ? [{ text: 'ボス' }] : []),
+      ],
+      rows: [
+        ...statRows(stats, null, null),
+        ['耐性', `${Math.round(def.resist * 100)}%`],
+        ['装備', 'なし'],
+      ],
+      skills: enemySkills(def),
+    };
+  }
+
+  // 再生中のユニット
+  const rep = state.replay;
+  if (!rep) return null;
+  const u = rep.units.find((x) => x.id === target.unitId);
+  if (!u) return null;
+  const frame = rep.frames[Math.min(state.frame, rep.frames.length - 1)]!;
+  const uf = frame.units.find((x) => x.id === u.id);
+  if (!uf) return null;
+
+  const c = charOf(u.defId);
+  const e = c ? null : enemyOf(u.defId);
+  const a = c ? state.assign.get(c.id) : null;
+
+  return {
+    title: `${shortNameOf(u.defId)}${u.dupIndex ? ` ${u.dupIndex}` : ''}（${u.name}）`,
+    tags: [
+      { text: ROLE_LABEL[u.role] },
+      { text: ELEMENT_LABEL[u.element], cls: `el-${u.element}` },
+      { text: u.myth ? MYTH_LABEL[u.myth] : u.side === 'enemy' ? '敵' : '—' },
+      { text: u.side === 'ally' ? `★${u.star}` : e?.isBoss ? 'ボス' : '通常敵' },
+      ...(u.onField ? [] : [{ text: 'サポート枠' }]),
+      ...(uf.alive ? [] : [{ text: '戦闘不能' }]),
+    ],
+    rows: [
+      ...statRows({ ...uf.stats, maxHp: u.maxHp, maxMana: u.maxMana }, uf.hp, uf.mana),
+      ...(uf.shield > 0 ? ([['シールド', formatNumber(uf.shield)]] as [string, string][]) : []),
+      ['装備', a ? equipmentLabel(a.equipment) : 'なし'],
+      ['デバフ', debuffRow(uf.debuffs)],
+    ],
+    skills: c ? charSkills(c) : e ? enemySkills(e) : [],
+  };
+}
+
+function renderDetail(root: HTMLElement): void {
+  if (!state.detail) return;
+  const view = buildDetailView(state.detail);
+  if (!view) {
+    state.detail = null;
+    return;
+  }
+
+  const panel = h('div', 'detail');
+  const head = h('div', 'detail-head');
+  head.appendChild(h('div', 'detail-title', view.title));
+  const close = btn('✕ 閉じる', false, closeDetail, true);
+  head.appendChild(close);
+  panel.appendChild(head);
+
+  const tagRow = h('div', 'row');
+  for (const t of view.tags) tagRow.appendChild(h('span', `tag ${t.cls ?? ''}`.trim(), t.text));
+  panel.appendChild(tagRow);
+
+  const grid = h('div', 'detail-grid');
+  for (const [k, v] of view.rows) {
+    grid.appendChild(h('div', 'dk', k));
+    grid.appendChild(h('div', 'dv', v));
+  }
+  panel.appendChild(grid);
+
+  for (const s of view.skills) {
+    const line = h('div', 'skill');
+    line.appendChild(h('span', 'skill-label', s.label));
+    line.appendChild(h('span', 'skill-text', s.text));
+    panel.appendChild(line);
+  }
+
+  root.appendChild(panel);
 }
 
 // ---------------------------------------------------------------------------
@@ -538,25 +842,34 @@ function renderSetup(root: HTMLElement): void {
     encRow.appendChild(
       btn(e.id, state.encounterId === e.id, () => {
         state.encounterId = e.id;
+        state.detail = null;
         render();
       }),
     );
   }
   root.appendChild(encRow);
-  root.appendChild(
-    h('div', 'hint', getEncounter(state.encounterId).name),
-  );
+  root.appendChild(h('div', 'hint', getEncounter(state.encounterId).name));
 
   // 盤面
-  root.appendChild(h('h2', undefined, `配置（前衛 ${countSlot('frontline')}/${team.frontlineSlotsDefault}・サポート ${countSlot('support')}/${team.supportSlotsDefault}）`));
+  root.appendChild(
+    h(
+      'h2',
+      undefined,
+      `配置（前衛 ${countSlot('frontline')}/${team.frontlineSlotsDefault}・サポート ${countSlot('support')}/${team.supportSlotsDefault}）`,
+    ),
+  );
   root.appendChild(renderBoard());
   root.appendChild(
     h(
       'div',
       'hint' + (validateLoadout() ? ' err' : ''),
-      state.message || validateLoadout() || 'キャラをタップして選び、盤面のマスをタップして置く',
+      state.message ||
+        validateLoadout() ||
+        'アイコンをタップで詳細。キャラを選んでからマスをタップで配置',
     ),
   );
+
+  renderDetail(root);
 
   // キャラ一覧
   root.appendChild(h('h2', undefined, 'キャラ'));
@@ -564,7 +877,7 @@ function renderSetup(root: HTMLElement): void {
     const a = state.assign.get(c.id)!;
     const card = h('div', 'char' + (state.selected === c.id ? ' selected' : ''));
     const head = h('div', 'char-head');
-    const name = h('div', 'char-name', `${c.id} ${c.name}`);
+    const name = h('div', 'char-name', `${c.shortName} ${c.name}`);
     name.addEventListener('click', () => {
       state.selected = state.selected === c.id ? null : c.id;
       state.message = state.selected ? '置きたいマスをタップ' : '';
@@ -572,12 +885,13 @@ function renderSetup(root: HTMLElement): void {
     });
     head.appendChild(name);
     head.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
-    head.appendChild(h('span', 'tag', ROLE_LABEL[c.role] ?? c.role));
+    head.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
     card.appendChild(head);
 
     const sub = h('div', 'char-sub');
     sub.appendChild(btn('前衛', a.slot === 'frontline', () => setSlot(c.id, 'frontline'), true));
     sub.appendChild(btn('サポート', a.slot === 'support', () => setSlot(c.id, 'support'), true));
+    sub.appendChild(btn('詳細', false, () => openDetail({ kind: 'char', charId: c.id }), true));
 
     const starSel = document.createElement('select');
     for (const s of [1, 2, 3]) {
@@ -623,11 +937,16 @@ function renderSetup(root: HTMLElement): void {
   const blRow = h('div', 'row');
   for (const b of BLESSINGS) {
     blRow.appendChild(
-      btn(b.name, state.blessings.has(b.id), () => {
-        if (state.blessings.has(b.id)) state.blessings.delete(b.id);
-        else state.blessings.add(b.id);
-        render();
-      }, true),
+      btn(
+        b.name,
+        state.blessings.has(b.id),
+        () => {
+          if (state.blessings.has(b.id)) state.blessings.delete(b.id);
+          else state.blessings.add(b.id);
+          render();
+        },
+        true,
+      ),
     );
   }
   root.appendChild(blRow);
@@ -660,32 +979,51 @@ function renderBattle(root: HTMLElement): void {
     btn(state.playing ? '⏸ 一時停止' : '▶ 再生', state.playing, () => {
       if (atEnd) state.frame = 0;
       state.playing = !state.playing;
+      state.resumeAfterDetail = false;
       render();
     }),
   );
   for (const s of [1, 2, 4] as const) {
     ctrl.appendChild(
-      btn(`${s}倍`, state.speed === s, () => {
-        state.speed = s;
-        render();
-      }, true),
+      btn(
+        `${s}倍`,
+        state.speed === s,
+        () => {
+          state.speed = s;
+          render();
+        },
+        true,
+      ),
     );
   }
   ctrl.appendChild(
-    btn('⏭ スキップ', false, () => {
-      state.frame = rep.frames.length - 1;
-      state.playing = false;
-      render();
-    }, true),
+    btn(
+      '⏭ スキップ',
+      false,
+      () => {
+        state.frame = rep.frames.length - 1;
+        state.playing = false;
+        state.resumeAfterDetail = false;
+        render();
+      },
+      true,
+    ),
   );
   ctrl.appendChild(
-    btn('⟲ 最初から', false, () => {
-      state.frame = 0;
-      state.playing = true;
-      render();
-    }, true),
+    btn(
+      '⟲ 最初から',
+      false,
+      () => {
+        state.frame = 0;
+        state.playing = true;
+        render();
+      },
+      true,
+    ),
   );
   root.appendChild(ctrl);
+
+  renderDetail(root);
 
   if (atEnd) {
     const label =
@@ -693,25 +1031,26 @@ function renderBattle(root: HTMLElement): void {
     root.appendChild(h('div', `result ${rep.outcome}`, `${label} ／ ${rep.duration.toFixed(1)}s`));
   }
 
-  // ユニット一覧（HP・マナ・デバフ）
-  root.appendChild(h('h2', undefined, 'ユニット'));
+  // ユニット一覧（タップで詳細）
+  root.appendChild(h('h2', undefined, 'ユニット（タップで詳細）'));
   const byId = new Map(rep.units.map((u) => [u.id, u]));
   for (const uf of frame.units) {
     const u = byId.get(uf.id)!;
-    const line = h('div', 'stat');
-    const debuffs = (['burn', 'frostbite', 'poison', 'paralysis'] as DebuffKind[])
-      .filter((k) => uf.debuffs[k] > 0)
+    const line = h('div', 'stat unit-line');
+    const debuffs = DEBUFF_ORDER.filter((k) => uf.debuffs[k] > 0)
       .map((k) => `${DEBUFF_LABEL[k]}${formatNumber(uf.debuffs[k])}`)
       .join(' ');
     const slot = u.onField ? '' : '[サポート]';
+    const dup = u.dupIndex ? `${u.dupIndex}` : '';
     line.textContent =
-      `${u.side === 'ally' ? '味' : '敵'} ${u.defId} ${slot} ` +
+      `${u.side === 'ally' ? '味' : '敵'} ${shortNameOf(u.defId)}${dup} ${slot} ` +
       `HP ${formatNumber(uf.hp)}/${formatNumber(u.maxHp)} ` +
       `MP ${formatNumber(uf.mana)}/${formatNumber(u.maxMana)}` +
       (uf.shield > 0 ? ` 盾 ${formatNumber(uf.shield)}` : '') +
       (debuffs ? ` ${debuffs}` : '') +
       (uf.alive ? '' : ' 戦闘不能');
     line.style.color = uf.alive ? (u.side === 'ally' ? '#9fc8ff' : '#ffb0b0') : '#6b7086';
+    line.addEventListener('click', () => openDetail({ kind: 'unit', unitId: u.id }));
     root.appendChild(line);
   }
 
@@ -729,9 +1068,11 @@ function renderBattle(root: HTMLElement): void {
     if (e.debuff) parts.push(DEBUFF_LABEL[e.debuff]);
     if (e.note) parts.push(e.note);
     if (e.pos) parts.push(`(${e.pos.x},${e.pos.y})`);
-    d.innerHTML =
-      `<span class="t">${e.t.toFixed(1)}</span> ` +
-      `<span class="${e.actor?.startsWith('E') ? 'e' : 'a'}">${parts.join(' ')}</span>`;
+    const span = h('span', e.actor?.startsWith('E') ? 'e' : 'a', parts.join(' '));
+    const tSpan = h('span', 't', e.t.toFixed(1));
+    d.appendChild(tSpan);
+    d.appendChild(document.createTextNode(' '));
+    d.appendChild(span);
     logBox.appendChild(d);
   }
   root.appendChild(logBox);
