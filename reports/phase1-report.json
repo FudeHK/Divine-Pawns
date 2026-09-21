@@ -1,0 +1,349 @@
+{
+  "generatedAt": "2026-09-21T19:48:30.017Z",
+  "determinism": {
+    "total": 1000,
+    "matched": 1000,
+    "mismatches": [],
+    "pass": true
+  },
+  "firstBattle": {
+    "total": 112,
+    "wins": 112,
+    "winRate": 100,
+    "perCharacter": [
+      {
+        "charId": "GRE_A",
+        "name": "青銅の守り手（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 5.93,
+        "losses": []
+      },
+      {
+        "charId": "GRE_B",
+        "name": "遠雷の射手（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 1.4,
+        "losses": []
+      },
+      {
+        "charId": "NOR_A",
+        "name": "灼炎の戦士（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 1.94,
+        "losses": []
+      },
+      {
+        "charId": "NOR_B",
+        "name": "霜の語り部（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 2.94,
+        "losses": []
+      },
+      {
+        "charId": "JPN_A",
+        "name": "毒沼の鬼（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 1.94,
+        "losses": []
+      },
+      {
+        "charId": "JPN_B",
+        "name": "鳴神の巫女（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 3.15,
+        "losses": []
+      },
+      {
+        "charId": "EGY_A",
+        "name": "陽炎の術師（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 1.65,
+        "losses": []
+      },
+      {
+        "charId": "EGY_B",
+        "name": "砂蛇の番人（仮）",
+        "battles": 14,
+        "wins": 14,
+        "winRate": 100,
+        "avgDuration": 5.93,
+        "losses": []
+      }
+    ],
+    "pass": true
+  },
+  "placement": {
+    "frontline": [
+      "GRE_A",
+      "NOR_A",
+      "GRE_B"
+    ],
+    "support": [
+      "JPN_B",
+      "EGY_A"
+    ],
+    "perEncounter": [
+      {
+        "encounter": "E1",
+        "placements": 2184,
+        "wins": 1334,
+        "winRate": 61.1,
+        "inBand": true,
+        "bestPlacement": "0,3 / 1,4 / 0,5",
+        "worstPlacement": "1,3 / 0,3 / 4,3",
+        "avgDuration": 29.34
+      },
+      {
+        "encounter": "E2",
+        "placements": 2184,
+        "wins": 1608,
+        "winRate": 73.6,
+        "inBand": true,
+        "bestPlacement": "4,5 / 3,3 / 0,5",
+        "worstPlacement": "0,3 / 2,3 / 4,3",
+        "avgDuration": 20.31
+      },
+      {
+        "encounter": "E3",
+        "placements": 2184,
+        "wins": 1426,
+        "winRate": 65.3,
+        "inBand": true,
+        "bestPlacement": "2,4 / 0,5 / 1,5",
+        "worstPlacement": "0,3 / 1,3 / 3,3",
+        "avgDuration": 19.62
+      },
+      {
+        "encounter": "E4",
+        "placements": 2184,
+        "wins": 1051,
+        "winRate": 48.1,
+        "inBand": true,
+        "bestPlacement": "2,4 / 1,3 / 0,5",
+        "worstPlacement": "0,3 / 1,3 / 2,3",
+        "avgDuration": 26.92
+      },
+      {
+        "encounter": "B1",
+        "placements": 2184,
+        "wins": 1265,
+        "winRate": 57.9,
+        "inBand": true,
+        "bestPlacement": "4,4 / 3,5 / 0,5",
+        "worstPlacement": "0,3 / 1,3 / 2,3",
+        "avgDuration": 32.9
+      }
+    ],
+    "encountersInBand": 5,
+    "pass": true
+  },
+  "balance": {
+    "loadouts": 1000,
+    "battles": 6000,
+    "avgDuration": 17.62,
+    "timeoutRate": 0,
+    "overallWinRate": 89.5,
+    "perEncounter": [
+      {
+        "encounter": "E0",
+        "battles": 1000,
+        "winRate": 100,
+        "avgDuration": 0.39,
+        "timeoutRate": 0,
+        "avgAllyDps": 1490.1
+      },
+      {
+        "encounter": "E1",
+        "battles": 1000,
+        "winRate": 83.6,
+        "avgDuration": 24.26,
+        "timeoutRate": 0,
+        "avgAllyDps": 214.9
+      },
+      {
+        "encounter": "E2",
+        "battles": 1000,
+        "winRate": 86.2,
+        "avgDuration": 17.29,
+        "timeoutRate": 0,
+        "avgAllyDps": 234.7
+      },
+      {
+        "encounter": "E3",
+        "battles": 1000,
+        "winRate": 90.9,
+        "avgDuration": 15.02,
+        "timeoutRate": 0,
+        "avgAllyDps": 250.1
+      },
+      {
+        "encounter": "E4",
+        "battles": 1000,
+        "winRate": 87,
+        "avgDuration": 22.1,
+        "timeoutRate": 0,
+        "avgAllyDps": 236.5
+      },
+      {
+        "encounter": "B1",
+        "battles": 1000,
+        "winRate": 89.3,
+        "avgDuration": 26.66,
+        "timeoutRate": 0,
+        "avgAllyDps": 221.7
+      }
+    ],
+    "dpsByElement": [
+      {
+        "element": "fire",
+        "avgDps": 266.2,
+        "share": 36
+      },
+      {
+        "element": "ice",
+        "avgDps": 100.5,
+        "share": 13.9
+      },
+      {
+        "element": "wood",
+        "avgDps": 94.8,
+        "share": 12.3
+      },
+      {
+        "element": "lightning",
+        "avgDps": 261.4,
+        "share": 37.8
+      }
+    ]
+  },
+  "scaling": {
+    "window": 30,
+    "builds": [
+      {
+        "name": "基準（★1・装備なし・加護なし）",
+        "dummyDps": 244.2,
+        "dummyFireDps": 213.8,
+        "dummyDpsByElement": {
+          "fire": 213.8,
+          "ice": 30.4,
+          "wood": 0,
+          "lightning": 0
+        },
+        "winRate": 100,
+        "perEncounter": [
+          {
+            "encounter": "E0",
+            "dps": 2617,
+            "win": true,
+            "duration": 0.1
+          },
+          {
+            "encounter": "E1",
+            "dps": 188.2,
+            "win": true,
+            "duration": 24.4
+          },
+          {
+            "encounter": "E2",
+            "dps": 201.2,
+            "win": true,
+            "duration": 18.3
+          },
+          {
+            "encounter": "E3",
+            "dps": 156.9,
+            "win": true,
+            "duration": 20.5
+          },
+          {
+            "encounter": "E4",
+            "dps": 172.2,
+            "win": true,
+            "duration": 25.5
+          },
+          {
+            "encounter": "B1",
+            "dps": 175.4,
+            "win": true,
+            "duration": 28.6
+          }
+        ]
+      },
+      {
+        "name": "燃焼ビルド（★3・装備あり・業火の加護・炎サポート）",
+        "dummyDps": 933,
+        "dummyFireDps": 839.7,
+        "dummyDpsByElement": {
+          "fire": 839.7,
+          "ice": 93.3,
+          "wood": 0,
+          "lightning": 0
+        },
+        "winRate": 100,
+        "perEncounter": [
+          {
+            "encounter": "E0",
+            "dps": 3460.4,
+            "win": true,
+            "duration": 0.1
+          },
+          {
+            "encounter": "E1",
+            "dps": 711.1,
+            "win": true,
+            "duration": 8.6
+          },
+          {
+            "encounter": "E2",
+            "dps": 630.2,
+            "win": true,
+            "duration": 6.4
+          },
+          {
+            "encounter": "E3",
+            "dps": 674.4,
+            "win": true,
+            "duration": 5
+          },
+          {
+            "encounter": "E4",
+            "dps": 568.3,
+            "win": true,
+            "duration": 8.5
+          },
+          {
+            "encounter": "B1",
+            "dps": 669.5,
+            "win": true,
+            "duration": 9
+          }
+        ]
+      }
+    ],
+    "maxDpsRatio": 3.82,
+    "fireDpsRatio": 3.93
+  },
+  "perf": {
+    "battles": 10000,
+    "seconds": 16.23,
+    "battlesPerSecond": 616.3,
+    "avgTicksPerBattle": 124.7,
+    "avgDuration": 12.47,
+    "logging": true
+  },
+  "pass": true
+}

@@ -1,0 +1,31 @@
+{
+  "name": "mythic-autobattler",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "sim:determinism": "tsx sim/determinism.ts",
+    "sim:first-battle": "tsx sim/first-battle.ts",
+    "sim:placement": "tsx sim/placement.ts",
+    "sim:balance": "tsx sim/balance.ts",
+    "sim:scaling": "tsx sim/scaling.ts",
+    "sim:perf": "tsx sim/perf.ts",
+    "sim:all": "tsx sim/all.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vitest": "^3.0.5"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  }
+}

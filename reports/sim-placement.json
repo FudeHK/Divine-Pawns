@@ -1,0 +1,65 @@
+{
+  "frontline": [
+    "GRE_A",
+    "NOR_A",
+    "GRE_B"
+  ],
+  "support": [
+    "JPN_B",
+    "EGY_A"
+  ],
+  "perEncounter": [
+    {
+      "encounter": "E1",
+      "placements": 2184,
+      "wins": 1334,
+      "winRate": 61.1,
+      "inBand": true,
+      "bestPlacement": "0,3 / 1,4 / 0,5",
+      "worstPlacement": "1,3 / 0,3 / 4,3",
+      "avgDuration": 29.34
+    },
+    {
+      "encounter": "E2",
+      "placements": 2184,
+      "wins": 1608,
+      "winRate": 73.6,
+      "inBand": true,
+      "bestPlacement": "4,5 / 3,3 / 0,5",
+      "worstPlacement": "0,3 / 2,3 / 4,3",
+      "avgDuration": 20.31
+    },
+    {
+      "encounter": "E3",
+      "placements": 2184,
+      "wins": 1426,
+      "winRate": 65.3,
+      "inBand": true,
+      "bestPlacement": "2,4 / 0,5 / 1,5",
+      "worstPlacement": "0,3 / 1,3 / 3,3",
+      "avgDuration": 19.62
+    },
+    {
+      "encounter": "E4",
+      "placements": 2184,
+      "wins": 1051,
+      "winRate": 48.1,
+      "inBand": true,
+      "bestPlacement": "2,4 / 1,3 / 0,5",
+      "worstPlacement": "0,3 / 1,3 / 2,3",
+      "avgDuration": 26.92
+    },
+    {
+      "encounter": "B1",
+      "placements": 2184,
+      "wins": 1265,
+      "winRate": 57.9,
+      "inBand": true,
+      "bestPlacement": "4,4 / 3,5 / 0,5",
+      "worstPlacement": "0,3 / 1,3 / 2,3",
+      "avgDuration": 32.9
+    }
+  ],
+  "encountersInBand": 5,
+  "pass": true
+}

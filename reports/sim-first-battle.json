@@ -1,0 +1,80 @@
+{
+  "total": 112,
+  "wins": 112,
+  "winRate": 100,
+  "perCharacter": [
+    {
+      "charId": "GRE_A",
+      "name": "青銅の守り手（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 5.93,
+      "losses": []
+    },
+    {
+      "charId": "GRE_B",
+      "name": "遠雷の射手（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 1.4,
+      "losses": []
+    },
+    {
+      "charId": "NOR_A",
+      "name": "灼炎の戦士（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 1.94,
+      "losses": []
+    },
+    {
+      "charId": "NOR_B",
+      "name": "霜の語り部（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 2.94,
+      "losses": []
+    },
+    {
+      "charId": "JPN_A",
+      "name": "毒沼の鬼（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 1.94,
+      "losses": []
+    },
+    {
+      "charId": "JPN_B",
+      "name": "鳴神の巫女（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 3.15,
+      "losses": []
+    },
+    {
+      "charId": "EGY_A",
+      "name": "陽炎の術師（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 1.65,
+      "losses": []
+    },
+    {
+      "charId": "EGY_B",
+      "name": "砂蛇の番人（仮）",
+      "battles": 14,
+      "wins": 14,
+      "winRate": 100,
+      "avgDuration": 5.93,
+      "losses": []
+    }
+  ],
+  "pass": true
+}

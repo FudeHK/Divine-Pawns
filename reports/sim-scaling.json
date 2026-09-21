@@ -1,0 +1,107 @@
+{
+  "window": 30,
+  "builds": [
+    {
+      "name": "基準（★1・装備なし・加護なし）",
+      "dummyDps": 244.2,
+      "dummyFireDps": 213.8,
+      "dummyDpsByElement": {
+        "fire": 213.8,
+        "ice": 30.4,
+        "wood": 0,
+        "lightning": 0
+      },
+      "winRate": 100,
+      "perEncounter": [
+        {
+          "encounter": "E0",
+          "dps": 2617,
+          "win": true,
+          "duration": 0.1
+        },
+        {
+          "encounter": "E1",
+          "dps": 188.2,
+          "win": true,
+          "duration": 24.4
+        },
+        {
+          "encounter": "E2",
+          "dps": 201.2,
+          "win": true,
+          "duration": 18.3
+        },
+        {
+          "encounter": "E3",
+          "dps": 156.9,
+          "win": true,
+          "duration": 20.5
+        },
+        {
+          "encounter": "E4",
+          "dps": 172.2,
+          "win": true,
+          "duration": 25.5
+        },
+        {
+          "encounter": "B1",
+          "dps": 175.4,
+          "win": true,
+          "duration": 28.6
+        }
+      ]
+    },
+    {
+      "name": "燃焼ビルド（★3・装備あり・業火の加護・炎サポート）",
+      "dummyDps": 933,
+      "dummyFireDps": 839.7,
+      "dummyDpsByElement": {
+        "fire": 839.7,
+        "ice": 93.3,
+        "wood": 0,
+        "lightning": 0
+      },
+      "winRate": 100,
+      "perEncounter": [
+        {
+          "encounter": "E0",
+          "dps": 3460.4,
+          "win": true,
+          "duration": 0.1
+        },
+        {
+          "encounter": "E1",
+          "dps": 711.1,
+          "win": true,
+          "duration": 8.6
+        },
+        {
+          "encounter": "E2",
+          "dps": 630.2,
+          "win": true,
+          "duration": 6.4
+        },
+        {
+          "encounter": "E3",
+          "dps": 674.4,
+          "win": true,
+          "duration": 5
+        },
+        {
+          "encounter": "E4",
+          "dps": 568.3,
+          "win": true,
+          "duration": 8.5
+        },
+        {
+          "encounter": "B1",
+          "dps": 669.5,
+          "win": true,
+          "duration": 9
+        }
+      ]
+    }
+  ],
+  "maxDpsRatio": 3.82,
+  "fireDpsRatio": 3.93
+}

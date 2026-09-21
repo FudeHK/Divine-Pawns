@@ -1,0 +1,262 @@
+:root {
+  --bg: #12131a;
+  --panel: #1c1e28;
+  --panel2: #242737;
+  --line: #333849;
+  --text: #e8eaf2;
+  --muted: #8d93a8;
+  --ally: #4aa3ff;
+  --enemy: #ff6b6b;
+  --accent: #ffcc52;
+  --ok: #57d9a3;
+  --fire: #ff7a45;
+  --ice: #6fd2ff;
+  --wood: #7ed957;
+  --lightning: #d29bff;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0b0c11;
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#app {
+  max-width: 430px;
+  min-width: 320px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 10px 10px 40px;
+}
+
+h1 {
+  font-size: 15px;
+  margin: 4px 0 10px;
+  letter-spacing: 0.02em;
+}
+
+h2 {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 14px 0 6px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  min-height: 34px;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button.on {
+  background: var(--accent);
+  color: #1a1206;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.small {
+  padding: 3px 7px;
+  min-height: 26px;
+  font-size: 11px;
+}
+
+input[type='text'] {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 8px;
+  width: 100%;
+  min-height: 34px;
+}
+
+select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 4px;
+  min-height: 26px;
+}
+
+.char {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  margin-bottom: 5px;
+  background: var(--panel2);
+}
+
+.char.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.char-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.char-name {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.el-fire {
+  color: var(--fire);
+}
+.el-ice {
+  color: var(--ice);
+}
+.el-wood {
+  color: var(--wood);
+}
+.el-lightning {
+  color: var(--lightning);
+}
+
+.char-sub {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.board {
+  width: 100%;
+  display: block;
+  background: #0e0f16;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  touch-action: manipulation;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 6px 0;
+  min-height: 16px;
+}
+
+.err {
+  color: var(--enemy);
+}
+
+.log {
+  height: 190px;
+  overflow-y: auto;
+  background: #0e0f16;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.log div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log .t {
+  color: var(--muted);
+}
+.log .a {
+  color: var(--ally);
+}
+.log .e {
+  color: var(--enemy);
+}
+
+.stat {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.result {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 6px 0;
+}
+.result.win {
+  color: var(--ok);
+}
+.result.lose {
+  color: var(--enemy);
+}
+.result.timeout {
+  color: var(--accent);
+}
+
+.legend {
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
