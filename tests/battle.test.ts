@@ -289,3 +289,90 @@ describe('乱数', () => {
     }
   });
 });
+
+describe('戦闘開始時のリセット', () => {
+  it('同じ設定で2回続けて実行すると、初期状態がぴったり一致する', () => {
+    const lo: Loadout = {
+      frontline: [
+        { charId: 'GRE_A', star: 2, equipment: ['eq_power'], pos: { x: 2, y: 3 } },
+        { charId: 'NOR_A', star: 1, equipment: [], pos: { x: 1, y: 3 } },
+      ],
+      support: [{ charId: 'EGY_A', star: 1, equipment: [] }],
+      blessings: ['bl_inferno'],
+    };
+    const snapshot = (): string => {
+      const b = new Battle(buildBattleSetup(lo, getEncounter('B1'), { seed: 'reset' }));
+      b.start();
+      return b.units
+        .map(
+          (u) =>
+            `${u.id}:${u.hp}/${u.base.maxHp} mp=${u.mana} sh=${u.shield} at=${u.attackTimer} ` +
+            `pos=${u.pos.x},${u.pos.y} burn=${u.debuffs.burn.stacks} fr=${u.debuffs.frostbite.stacks} ` +
+            `po=${u.debuffs.poison.remaining} pa=${u.debuffs.paralysis.stacks} ` +
+            `mods=${u.timedMods.length}/${u.auraMods.length} red=${u.reductions.length} taunt=${u.tauntRemaining}`,
+        )
+        .join('|');
+    };
+    expect(snapshot()).toBe(snapshot());
+  });
+
+  it('同じ Battle を撃ち直しても、敵のHPは満タンから始まる', () => {
+    const lo: Loadout = {
+      frontline: [{ charId: 'GRE_A', star: 1, equipment: [], pos: { x: 2, y: 3 } }],
+      support: [],
+      blessings: [],
+    };
+    const b = new Battle(buildBattleSetup(lo, getEncounter('B1'), { seed: 'retry' }));
+    const first = b.run();
+    const afterFirst = b.units.map((u) => u.hp);
+    // 1回目で敵はHPが減っている（or 倒れている）
+    expect(afterFirst.some((hp) => hp === 0)).toBe(true);
+
+    // 撃ち直すと、いったん全員が定義どおりの初期値に戻る
+    b.resetAll();
+    for (const u of b.units) {
+      expect(u.hp, u.id).toBe(u.base.maxHp);
+      expect(u.alive, u.id).toBe(true);
+      expect(u.mana, u.id).toBe(0);
+      expect(u.shield, u.id).toBe(0);
+      expect(u.attackTimer, u.id).toBe(0);
+      expect(u.debuffs.burn.stacks, u.id).toBe(0);
+      expect(u.debuffs.frostbite.stacks, u.id).toBe(0);
+      expect(u.debuffs.poison.remaining, u.id).toBe(0);
+      expect(u.debuffs.paralysis.stacks, u.id).toBe(0);
+      expect(u.timedMods.length, u.id).toBe(0);
+      expect(u.effects.every((re) => re.uses === 0 && !re.fired), u.id).toBe(true);
+    }
+
+    // start() をやり直すと、まっさらな Battle と同じ状態から始まる
+    b.finished = false;
+    b.tickCount = 0;
+    b.t = 0;
+    b.start();
+    const fresh = new Battle(buildBattleSetup(lo, getEncounter('B1'), { seed: 'retry' }));
+    fresh.start();
+    const dump = (x: Battle): string =>
+      x.units.map((u) => `${u.id}:${u.hp}/${u.mana}/${u.alive}`).join('|');
+    expect(dump(b)).toBe(dump(fresh));
+    expect(first.outcome).toBeTruthy();
+  });
+
+  it('章ボスに負けて再挑戦しても、敵のHPは前回を引き継がない', () => {
+    const lo: Loadout = {
+      frontline: [{ charId: 'JPN_B', star: 1, equipment: [], pos: { x: 2, y: 5 } }],
+      support: [],
+      blessings: [],
+    };
+    const enemyHpAtStart = (): number[] => {
+      const b = new Battle(buildBattleSetup(lo, getEncounter('B1'), { seed: 'boss-retry' }));
+      b.start();
+      return b.units.filter((u) => u.side === 'enemy').map((u) => u.hp);
+    };
+    const a = enemyHpAtStart();
+    // 1回まるごと戦ってから、もう一度作り直す
+    runBattle(buildBattleSetup(lo, getEncounter('B1'), { seed: 'boss-retry' }));
+    const c = enemyHpAtStart();
+    expect(c).toEqual(a);
+    expect(a.every((hp) => hp > 0)).toBe(true);
+  });
+});

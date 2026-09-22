@@ -1,9 +1,9 @@
 {
   "loadouts": 1000,
   "battles": 6000,
-  "avgDuration": 17.45,
+  "avgDuration": 13.82,
   "timeoutRate": 0,
-  "overallWinRate": 89.92,
+  "overallWinRate": 92.55,
   "perEncounter": [
     {
       "encounter": "E0",
@@ -16,10 +16,10 @@
     {
       "encounter": "E1",
       "battles": 1000,
-      "winRate": 84.2,
-      "avgDuration": 24.04,
+      "winRate": 100,
+      "avgDuration": 2.26,
       "timeoutRate": 0,
-      "avgAllyDps": 218.1
+      "avgAllyDps": 301.1
     },
     {
       "encounter": "E2",
@@ -57,23 +57,23 @@
   "dpsByElement": [
     {
       "element": "fire",
-      "avgDps": 265.5,
-      "share": 35.3
+      "avgDps": 271.4,
+      "share": 35
     },
     {
       "element": "ice",
-      "avgDps": 100.9,
-      "share": 13.7
+      "avgDps": 105.9,
+      "share": 13.9
     },
     {
       "element": "wood",
-      "avgDps": 94.9,
-      "share": 12.1
+      "avgDps": 97.3,
+      "share": 12
     },
     {
       "element": "lightning",
-      "avgDps": 274.2,
-      "share": 39
+      "avgDps": 283.9,
+      "share": 39.1
     }
   ]
 }

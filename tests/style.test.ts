@@ -132,7 +132,7 @@ describe('タップ領域', () => {
   });
 
   it('入力欄と一覧行にも 44px 以上の高さがある', () => {
-    for (const sel of ["input[type='text']", '.unit-line', '.char-name', '.skill', '.sheet-list-item']) {
+    for (const sel of ["input[type='text']", '.unit-line', '.skill', '.sheet-list-item', '.char-sub']) {
       const r = ruleFor(sel);
       expect(r, sel).toBeTruthy();
       const d = new Map(declarations(r!.body));

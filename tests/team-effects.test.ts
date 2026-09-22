@@ -88,8 +88,9 @@ describe('加護はチーム効果（ユニットではない）', () => {
   });
 
   it('業火の加護の効果量は従来どおり（燃焼係数が2倍）', () => {
+    // 1章1戦目（E1）は一瞬で終わるので、燃焼が乗る長さの戦闘で見る
     const run = (bless: string[]): number => {
-      const b = new Battle(buildBattleSetup(loadout(bless), getEncounter('E1'), { seed: 'te' }));
+      const b = new Battle(buildBattleSetup(loadout(bless), getEncounter('E4'), { seed: 'te' }));
       b.run();
       // NOR_A（炎）が付けた燃焼の係数を、燃焼ダメージの合計で見る
       return b.log.events
@@ -104,7 +105,7 @@ describe('加護はチーム効果（ユニットではない）', () => {
 
   it('燃焼係数そのものが2倍になる', () => {
     const coefOf = (bless: string[]): number => {
-      const b = new Battle(buildBattleSetup(loadout(bless), getEncounter('E1'), { seed: 'te' }));
+      const b = new Battle(buildBattleSetup(loadout(bless), getEncounter('E4'), { seed: 'te' }));
       b.start();
       for (let i = 0; i < 400 && !b.finished; i++) {
         b.step();

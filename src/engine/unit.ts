@@ -174,6 +174,38 @@ export function createUnit(i: CreateUnitInput): Unit {
   };
 }
 
+/**
+ * ユニットを「定義どおりの初期値」に戻す。
+ * 戦闘開始時に必ず呼び、前の戦闘の状態（HP・マナ・デバフ・バフ・
+ * クールダウン・位置・効果の使用回数）を一切引き継がないようにする。
+ */
+export function resetUnit(u: Unit, initialPos: Hex, initialAttackDelay = 0): void {
+  u.pos = { ...initialPos };
+  u.eff = cloneStats(u.base);
+  u.hp = u.base.maxHp;
+  u.shield = 0;
+  u.mana = 0;
+  u.attackTimer = Math.max(0, initialAttackDelay);
+  u.moveProgress = 0;
+  u.alive = true;
+  u.debuffs = newDebuffState();
+  u.timedMods = [];
+  u.auraMods = [];
+  u.reductions = [];
+  u.tauntRemaining = 0;
+  u.skillPowerBonus = 0;
+  u.lastAttacker = null;
+  u.currentTarget = null;
+  u.damageDealt = 0;
+  u.damageByElement = { fire: 0, ice: 0, wood: 0, lightning: 0 };
+  for (const re of u.effects) {
+    re.uses = 0;
+    re.timer = 0;
+    re.fired = false;
+    re.active = false;
+  }
+}
+
 export function emptyUnitStats(): Stats {
   return emptyStats();
 }

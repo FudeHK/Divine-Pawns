@@ -29,6 +29,7 @@ import { attackInterval, cloneStats, normalDamage } from './stats';
 import {
   createUnit,
   newGlobalMods,
+  resetUnit,
   type GlobalMods,
   type RuntimeEffect,
   type TimedMod,
@@ -229,6 +230,10 @@ export class Battle {
   /** チーム単位の効果（加護など）。ユニットではない */
   readonly teamEffects: RuntimeTeamEffect[] = [];
 
+  /** 戦闘開始時に戻すための初期位置・初期攻撃遅延 */
+  private readonly initialPos = new Map<string, Hex>();
+  private readonly initialDelay = new Map<string, number>();
+
   constructor(setup: BattleSetup) {
     this.cfg = setup.config ?? DEFAULT_CONFIG;
     this.rng = new Rng(`${setup.seed}::battle`);
@@ -260,6 +265,8 @@ export class Battle {
         active: false,
         origin: e.origin,
       }));
+      this.initialPos.set(spec.id, { ...spec.pos });
+      this.initialDelay.set(spec.id, spec.initialAttackDelay ?? this.cfg.initialAttackDelay);
       this.units.push(u);
     }
     // ユニットIDで安定ソート（決定論）
@@ -1304,6 +1311,9 @@ export class Battle {
   // -------------------------------------------------------------------------
 
   start(): void {
+    // 戦闘開始時は、味方・敵とも必ず定義どおりの初期値に戻す
+    // （敗北→再挑戦や、同じノードへの再訪問で状態を引き継がないため）
+    this.resetAll();
     this.emit({ type: 'battleStart', value: 0 });
     for (const u of this.units) {
       this.emit({
@@ -1332,6 +1342,22 @@ export class Battle {
     this.fireTeamTrigger('battleStart');
     this.recomputeAuras();
     this.recomputeEffective();
+  }
+
+  /** すべてのユニットとチーム効果を初期状態に戻す */
+  resetAll(): void {
+    for (const u of this.units) {
+      resetUnit(u, this.initialPos.get(u.id) ?? u.pos, this.initialDelay.get(u.id) ?? 0);
+    }
+    for (const te of this.teamEffects) {
+      te.uses = 0;
+      te.timer = 0;
+      te.fired = false;
+      te.active = false;
+    }
+    resetSideGlobals(this.globals.ally);
+    resetSideGlobals(this.globals.enemy);
+    this.suddenDeathStep = 0;
   }
 
   /** 1ステップ進める。終了したら true */

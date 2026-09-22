@@ -36,6 +36,10 @@
   --lightning: #d29bff;
 
   --bar-h: 72px;
+  /* 下部バーの高さ上限（src/ui/layout.ts の barMaxVh と同じ値にする） */
+  --bar-max-vh: 56;
+  /* 盤面が潰れないための最小の高さ */
+  --board-min: 160px;
 }
 
 * {
@@ -79,7 +83,7 @@ body {
 /* 盤面は残りの高さいっぱいを使う（潰れないよう最低高さを確保） */
 .board-area {
   flex: 1 1 auto;
-  min-height: 46vh;
+  min-height: var(--board-min);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -179,9 +183,12 @@ select {
 .char {
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: var(--gap);
-  margin-bottom: var(--gap);
+  padding: 6px;
+  margin-bottom: 0;
   background: var(--panel2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .char.selected {
@@ -194,6 +201,17 @@ select {
   align-items: center;
   gap: 6px;
   justify-content: space-between;
+  height: 30px;
+}
+
+/* 2行目: 配置状態＋簡易ステータス */
+.char-line2 {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  justify-content: space-between;
+  height: 26px;
+  overflow: hidden;
 }
 
 .char-name {
@@ -204,8 +222,6 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
-  min-height: var(--tap);
   display: flex;
   align-items: center;
 }
@@ -244,8 +260,20 @@ select {
   display: flex;
   gap: var(--gap);
   align-items: center;
-  margin-top: 6px;
-  flex-wrap: wrap;
+  min-height: var(--tap);
+  flex-wrap: nowrap;
+}
+
+.char-sub button,
+.char-sub select {
+  padding: 4px 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.card-toggle {
+  flex: 0 0 auto;
+  width: var(--tap);
 }
 
 /* --- 盤面 --- */
@@ -263,7 +291,7 @@ select {
 .hint {
   font-size: var(--font-sub);
   color: var(--muted);
-  margin: 6px 0;
+  margin: 2px 0;
   min-height: 20px;
 }
 
@@ -339,8 +367,7 @@ select {
 
 .bottom-bar {
   flex: 0 0 auto;
-  /* 画面の40%を上限にする */
-  max-height: 40vh;
+  max-height: calc(var(--bar-max-vh) * 1vh);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -657,7 +684,8 @@ select {
 .team-summary {
   font-size: var(--font-body);
   font-weight: 700;
-  padding: 2px 0 4px;
+  height: 22px;
+  line-height: 22px;
 }
 
 .char-pager {
@@ -683,7 +711,8 @@ select {
   text-align: center;
   font-size: var(--font-sub);
   color: var(--muted);
-  padding-top: 4px;
+  height: 20px;
+  line-height: 20px;
 }
 
 .char-idrow {
@@ -696,10 +725,13 @@ select {
 
 .char-slot-state {
   font-size: var(--font-sub);
-  margin-top: 4px;
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: 8px;
   background: #11131c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .char-slot-state.state-frontline {
@@ -715,8 +747,7 @@ select {
 .char-quick {
   display: flex;
   gap: var(--gap);
-  flex-wrap: wrap;
-  margin-top: 4px;
+  flex: 0 0 auto;
 }
 
 .quick-cell {
@@ -738,7 +769,6 @@ select {
   display: flex;
   gap: var(--gap);
   flex-wrap: wrap;
-  margin-top: 4px;
 }
 
 .skill-icon,
@@ -834,4 +864,58 @@ select {
   font-size: var(--font-body);
   line-height: 1.6;
   margin: 4px 0 var(--gap);
+}
+
+
+/* --- メイン画面に出す画面（リザルト・ショップ・イベント・進行演出） --- */
+
+.board-area[data-screen='result'],
+.board-area[data-screen='shop'],
+.board-area[data-screen='event'],
+.board-area[data-screen='nodeTransition'] {
+  align-items: stretch;
+  overflow-y: auto;
+}
+
+.screen-panel {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.screen-title {
+  font-size: var(--font-heading);
+  font-weight: 700;
+}
+
+.screen-title.win {
+  color: var(--ok);
+}
+
+.screen-title.lose {
+  color: var(--enemy);
+}
+
+.screen-text {
+  font-size: var(--font-body);
+  line-height: 1.6;
+}
+
+.run-map.moving .run-node.current {
+  animation: node-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }

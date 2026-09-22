@@ -12,12 +12,12 @@
     {
       "encounter": "E1",
       "placements": 2184,
-      "wins": 1334,
-      "winRate": 61.1,
-      "inBand": true,
-      "bestPlacement": "0,3 / 1,4 / 0,5",
-      "worstPlacement": "1,3 / 0,3 / 4,3",
-      "avgDuration": 29.34
+      "wins": 2184,
+      "winRate": 100,
+      "inBand": false,
+      "bestPlacement": "0,3 / 1,4 / 3,5",
+      "worstPlacement": null,
+      "avgDuration": 2.78
     },
     {
       "encounter": "E2",
@@ -60,6 +60,6 @@
       "avgDuration": 32.9
     }
   ],
-  "encountersInBand": 5,
+  "encountersInBand": 4,
   "pass": true
 }

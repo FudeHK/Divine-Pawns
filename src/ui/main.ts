@@ -95,6 +95,17 @@ type Sheet =
 /** 戦闘が終わったあと、どう扱うか */
 type BattleContext = 'sandbox' | 'runNode' | 'runEvent';
 
+/**
+ * メイン画面に何を出すか。
+ * 盤面を出すのは「戦闘準備中」と「戦闘実行中」だけ。
+ */
+type ScreenMode = 'prep' | 'battle' | 'result' | 'shop' | 'event' | 'nodeTransition';
+
+/** 盤面を出す画面かどうか */
+function showsBoard(mode: ScreenMode): boolean {
+  return mode === 'prep' || mode === 'battle';
+}
+
 const team = DEFAULT_CONFIG.team;
 const runCfg = DEFAULT_RUN_CONFIG;
 
@@ -121,8 +132,14 @@ const state = {
   playing: false,
   speed: 1 as 1 | 2 | 4,
   tab: 'team' as Tab,
+  /** メイン画面のモード */
+  screen: 'prep' as ScreenMode,
+  /** 直近の戦闘結果（リザルト画面用） */
+  resultInfo: null as { won: boolean; text: string; lines: string[] } | null,
   /** 「編成」タブで今表示しているメンバーの番号 */
   cardIndex: 0,
+  /** キャラカードでスキル・装備を開いているか（閉じている時はカードが1画面に収まる） */
+  cardExpanded: false,
   sheets: [] as Sheet[],
   resumeAfterSheet: false,
 
@@ -752,6 +769,25 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.sheets.length > 0) closeTopSheet();
 });
 
+// --- 画面モード ---
+
+function setScreen(mode: ScreenMode): void {
+  state.screen = mode;
+  // 準備中以外はタブ操作を止めるので、選択タブを戻しておく
+  if (mode !== 'prep' && mode !== 'battle') state.tab = 'run';
+}
+
+/** いまのランのノードから、次に出すべき画面を決める */
+function screenForNode(): ScreenMode {
+  const run = state.run;
+  if (!run || run.phase !== 'node') return 'prep';
+  const node = currentNode(run, runCfg);
+  if (!node) return 'prep';
+  if (node.kind === 'shop' || node.kind === 'bossShop') return 'shop';
+  if (node.kind === 'event') return run.lastEvent?.battleEncounterId ? 'event' : 'event';
+  return 'prep';
+}
+
 // --- 戦闘 ---
 
 function startBattle(context: BattleContext = 'sandbox', encounterId?: string): void {
@@ -782,6 +818,8 @@ function startBattle(context: BattleContext = 'sandbox', encounterId?: string): 
   state.resumeAfterSheet = false;
   state.message = '';
   state.tab = 'control';
+  setScreen('battle');
+  state.tab = 'control';
   render();
 }
 
@@ -792,7 +830,10 @@ function backToSetup(): void {
   state.sheets.length = 0;
   state.resumeAfterSheet = false;
   state.pendingResult = false;
-  state.tab = state.run ? 'run' : 'team';
+  state.resultInfo = null;
+  state.tab = 'team';
+  setScreen(state.run ? screenForNode() : 'prep');
+  if (state.screen === 'prep') state.tab = 'team';
   render();
 }
 
@@ -817,7 +858,41 @@ function applyRunBattleResult(): void {
   }
   autoSave();
   state.pendingResult = false;
-  backToSetup();
+  state.replay = null;
+  state.playing = false;
+  state.frame = 0;
+  state.resultInfo = {
+    won,
+    text: won ? '勝利' : ' 敗北',
+    lines: [state.runMessage],
+  };
+  setScreen('result');
+  render();
+}
+
+/** リザルトを閉じて、次のノードへの進行演出へ */
+function afterResult(): void {
+  const run = state.run;
+  if (!run) {
+    backToSetup();
+    return;
+  }
+  state.resultInfo = null;
+  if (run.phase !== 'node') {
+    setScreen('result');
+    render();
+    return;
+  }
+  setScreen('nodeTransition');
+  render();
+}
+
+/** 進行演出を閉じて、次のノードの画面へ */
+function afterTransition(): void {
+  state.runMessage = '';
+  setScreen(screenForNode());
+  if (state.screen === 'prep') state.tab = 'team';
+  render();
 }
 
 // ---------------------------------------------------------------------------
@@ -833,8 +908,11 @@ function startRun(): void {
   state.savedRun = null;
   state.cardIndex = 0;
   state.runMessage = 'ランを始めた。';
+  state.resultInfo = null;
+  state.replay = null;
   autoSave();
-  state.tab = 'run';
+  setScreen(screenForNode());
+  state.tab = state.screen === 'prep' ? 'team' : 'run';
   render();
 }
 
@@ -844,7 +922,8 @@ function resumeRun(r: RunState): void {
   state.cardIndex = 0;
   state.seed = r.seed;
   state.runMessage = 'ランを再開した。';
-  state.tab = 'run';
+  setScreen(screenForNode());
+  state.tab = state.screen === 'prep' ? 'team' : 'run';
   render();
 }
 
@@ -854,6 +933,8 @@ function abandonRun(): void {
   clearRun();
   state.cardIndex = 0;
   state.runMessage = 'ランをやめた。';
+  state.resultInfo = null;
+  setScreen('prep');
   state.tab = 'run';
   render();
 }
@@ -1136,33 +1217,18 @@ function renderTeamTab(body: HTMLElement): void {
     ['char', `slot-${m.slot}`, state.selected === m.key ? 'selected' : ''].filter(Boolean).join(' '),
   );
 
+  // 1行目: 名前・属性・役割・ID・★（タップ対象ではないので低い）
   const head = h('div', 'char-head');
   head.appendChild(h('div', 'char-name', c.name));
   head.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
   head.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
+  head.appendChild(h('span', 'char-id', c.id));
   card.appendChild(head);
 
-  const idRow = h('div', 'char-idrow');
-  idRow.appendChild(h('span', 'char-id', c.id));
-  const starSel = document.createElement('select');
-  for (const s of [1, 2, 3]) {
-    const o = document.createElement('option');
-    o.value = String(s);
-    o.textContent = `★${s}`;
-    if (m.star === s) o.selected = true;
-    starSel.appendChild(o);
-  }
-  starSel.addEventListener('change', () => {
-    // ★が上がってもすでに着けている装備はそのまま残す
-    updateMember(m.key, (o) => (o.star = Number(starSel.value) as Star));
-    render();
-  });
-  idRow.appendChild(starSel);
-  card.appendChild(idRow);
-
-  card.appendChild(h('div', `char-slot-state state-${m.slot}`, slotLabel(m)));
-
-  const quick = h('div', 'char-quick');
+  // 2行目: 配置状態＋簡易ステータス
+  const line2 = h('div', 'char-line2');
+  line2.appendChild(h('span', `char-slot-state state-${m.slot}`, slotLabel(m)));
+  const quick = h('span', 'char-quick');
   for (const [k, v] of [
     ['HP', formatNumber(stats.maxHp)],
     ['攻', formatNumber(stats.atk)],
@@ -1174,36 +1240,33 @@ function renderTeamTab(body: HTMLElement): void {
     cell.appendChild(h('span', 'quick-v', v));
     quick.appendChild(cell);
   }
-  card.appendChild(quick);
+  line2.appendChild(quick);
+  card.appendChild(line2);
 
-  const skills = h('div', 'char-skills');
-  for (const [mark, label] of [
-    ['A', 'アクティブ'],
-    ['P', 'パッシブ'],
-    ['S', 'サポート効果'],
-  ] as [string, string][]) {
-    const b = btn(mark, false, () =>
-      openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } }),
-    );
-    b.classList.add('skill-icon');
-    b.title = label;
-    skills.appendChild(b);
-  }
-  m.equipment.forEach((id, i) => {
-    const b = btn(id ? getEquipment(id).name.slice(0, 2) : '＋', id !== '', () =>
-      openSheet({ kind: 'equip', key: m.key, slot: i }),
-    );
-    b.classList.add('equip-chip');
-    b.title = `装備スロット ${i + 1}`;
-    skills.appendChild(b);
-  });
-  card.appendChild(skills);
-
+  // 3行目: 操作（★・前衛/サポート・配置・詳細・展開）
   const sub = h('div', 'char-sub');
+  const starSel = document.createElement('select');
+  for (const st of [1, 2, 3]) {
+    const o = document.createElement('option');
+    o.value = String(st);
+    o.textContent = `★${st}`;
+    if (m.star === st) o.selected = true;
+    starSel.appendChild(o);
+  }
+  starSel.addEventListener('change', () => {
+    // ★が上がってもすでに着けている装備はそのまま残す
+    updateMember(m.key, (o) => (o.star = Number(starSel.value) as Star));
+    render();
+  });
+  sub.appendChild(starSel);
   sub.appendChild(btn('前衛', m.slot === 'frontline', () => setSlot(m.key, 'frontline')));
-  sub.appendChild(btn('サポート', m.slot === 'support', () => setSlot(m.key, 'support')));
-  sub.appendChild(
-    btn(state.selected === m.key ? '配置中止' : '配置', state.selected === m.key, () => {
+  sub.appendChild(btn('サポ', m.slot === 'support', () => setSlot(m.key, 'support')));
+  card.appendChild(sub);
+
+  // 4行目: 配置・詳細・展開
+  const sub2 = h('div', 'char-sub');
+  sub2.appendChild(
+    btn(state.selected === m.key ? '中止' : '配置', state.selected === m.key, () => {
       if (m.slot !== 'frontline') {
         state.message = '前衛にしてから配置してください';
         render();
@@ -1214,10 +1277,47 @@ function renderTeamTab(body: HTMLElement): void {
       render();
     }),
   );
-  sub.appendChild(
+  sub2.appendChild(
     btn('詳細', false, () => openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } })),
   );
-  card.appendChild(sub);
+  sub2.appendChild(
+    btn(
+      state.cardExpanded ? '▲ 閉じる' : '▼ 装備',
+      state.cardExpanded,
+      () => {
+        state.cardExpanded = !state.cardExpanded;
+        render();
+      },
+      'card-toggle',
+    ),
+  );
+  card.appendChild(sub2);
+
+  // 展開したときだけ出す（閉じている間はカードが1画面に収まる）
+  if (state.cardExpanded) {
+    const extra = h('div', 'char-skills');
+    for (const [mark, label] of [
+      ['A', 'アクティブ'],
+      ['P', 'パッシブ'],
+      ['S', 'サポート効果'],
+    ] as [string, string][]) {
+      const b = btn(mark, false, () =>
+        openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } }),
+      );
+      b.classList.add('skill-icon');
+      b.title = label;
+      extra.appendChild(b);
+    }
+    m.equipment.forEach((id, i) => {
+      const b = btn(id ? getEquipment(id).name.slice(0, 2) : '＋', id !== '', () =>
+        openSheet({ kind: 'equip', key: m.key, slot: i }),
+      );
+      b.classList.add('equip-chip');
+      b.title = `装備スロット ${i + 1}`;
+      extra.appendChild(b);
+    });
+    card.appendChild(extra);
+  }
 
   pager.appendChild(card);
   pager.appendChild(btn('▶', false, () => pageBy(1), 'pager-next'));
@@ -1278,7 +1378,7 @@ function renderBlessingTab(body: HTMLElement): void {
 }
 
 // ---------------------------------------------------------------------------
-// 「ラン」タブ
+// ラン関連の画面（メイン画面に出す）
 // ---------------------------------------------------------------------------
 
 function shopItemLabel(item: ShopItem): { name: string; desc: string } {
@@ -1302,11 +1402,80 @@ function shopItemLabel(item: ShopItem): { name: string; desc: string } {
   }
 }
 
-function renderShopNode(body: HTMLElement, run: RunState): void {
-  const shop = run.shop!;
-  body.appendChild(
-    h('div', 'hint', shop.boss ? 'ボスショップ（高価だが上物がそろう）' : 'リザルト兼ショップ'),
+/** 進行マップ（メイン画面・ランタブの両方で使う） */
+function progressMapEl(run: RunState, animate = false): HTMLElement {
+  const map = h('div', 'run-map' + (animate ? ' moving' : ''));
+  for (const n of progressMap(run, runCfg)) {
+    map.appendChild(
+      h('span', 'run-node' + (n.done ? ' done' : '') + (n.current ? ' current' : ''), n.label),
+    );
+  }
+  return map;
+}
+
+function runHeader(run: RunState): HTMLElement {
+  return h(
+    'div',
+    'run-status',
+    `${run.chapter}章 ／ ♥ ${run.life} ／ ${run.coins}c ／ 前衛${run.frontlineSlots}・サポ${run.supportSlots}`,
   );
+}
+
+/** リザルト画面 */
+function renderResultScreen(main: HTMLElement): void {
+  const run = state.run;
+  const info = state.resultInfo;
+  const panel = h('div', 'screen-panel result-screen');
+
+  if (run && run.phase === 'clear') {
+    panel.appendChild(h('div', 'screen-title win', 'クリア！'));
+    panel.appendChild(h('div', 'screen-text', '最終章のボスを倒した。'));
+    panel.appendChild(btn('新しいランを始める', true, startRun, 'wide'));
+    main.appendChild(panel);
+    return;
+  }
+  if (run && run.phase === 'gameover') {
+    panel.appendChild(h('div', 'screen-title lose', 'ゲームオーバー'));
+    panel.appendChild(h('div', 'screen-text', 'ライフが尽きた。'));
+    panel.appendChild(btn('新しいランを始める', true, startRun, 'wide'));
+    main.appendChild(panel);
+    return;
+  }
+
+  panel.appendChild(
+    h('div', 'screen-title ' + (info?.won ? 'win' : 'lose'), info?.won ? '勝利！' : '敗北'),
+  );
+  for (const line of info?.lines ?? []) {
+    if (line) panel.appendChild(h('div', 'screen-text', line));
+  }
+  if (run) panel.appendChild(runHeader(run));
+  panel.appendChild(btn('次へ', true, afterResult, 'wide'));
+  main.appendChild(panel);
+}
+
+/** ノード進行の演出 */
+function renderTransitionScreen(main: HTMLElement): void {
+  const run = state.run!;
+  const panel = h('div', 'screen-panel transition-screen');
+  panel.appendChild(h('div', 'screen-title', `${run.chapter}章 を進む`));
+  panel.appendChild(progressMapEl(run, true));
+  const node = currentNode(run, runCfg);
+  panel.appendChild(h('div', 'screen-text', `次は「${NODE_LABEL[node?.kind ?? 'battle']}」`));
+  panel.appendChild(btn('進む', true, afterTransition, 'wide'));
+  main.appendChild(panel);
+}
+
+/** ショップ画面 */
+function renderShopScreen(main: HTMLElement): void {
+  const run = state.run!;
+  const shop = run.shop!;
+  const panel = h('div', 'screen-panel shop-screen');
+  panel.appendChild(
+    h('div', 'screen-title', shop.boss ? 'ボスショップ' : 'リザルト ＆ ショップ'),
+  );
+  panel.appendChild(runHeader(run));
+  if (state.runMessage) panel.appendChild(h('div', 'hint', state.runMessage));
+
   const list = h('div', 'shop-list');
   shop.items.forEach((slot, i) => {
     const { name, desc } = shopItemLabel(slot.item);
@@ -1328,7 +1497,7 @@ function renderShopNode(body: HTMLElement, run: RunState): void {
     row.appendChild(b);
     list.appendChild(row);
   });
-  body.appendChild(list);
+  panel.appendChild(list);
 
   const row = h('div', 'row');
   const rb = btn(`リロール ${shop.rerollCost}c`, false, () => {
@@ -1345,23 +1514,34 @@ function renderShopNode(body: HTMLElement, run: RunState): void {
       advanceNode(run, runCfg);
       state.runMessage = '';
       autoSave();
+      setScreen('nodeTransition');
       render();
     }),
   );
-  body.appendChild(row);
+  panel.appendChild(row);
+  main.appendChild(panel);
 }
 
-function renderEventNode(body: HTMLElement, run: RunState): void {
+/** イベント画面 */
+function renderEventScreen(main: HTMLElement): void {
+  const run = state.run!;
   const def = getEvent(run.eventId!);
   const pending = Boolean(run.lastEvent?.battleEncounterId);
-  body.appendChild(h('div', 'event-title', def.name));
-  body.appendChild(h('div', 'event-text', def.text));
+  const panel = h('div', 'screen-panel event-screen');
+  panel.appendChild(h('div', 'screen-title', def.name));
+  panel.appendChild(h('div', 'event-text', def.text));
+  if (state.runMessage) panel.appendChild(h('div', 'hint', state.runMessage));
 
   if (pending) {
-    body.appendChild(h('div', 'hint', 'ミニ戦闘に挑む'));
-    body.appendChild(
-      btn('▶ ミニ戦闘へ', true, () => startBattle('runEvent', run.lastEvent!.battleEncounterId!)),
+    panel.appendChild(
+      btn(
+        '▶ ミニ戦闘へ',
+        true,
+        () => startBattle('runEvent', run.lastEvent!.battleEncounterId!),
+        'wide',
+      ),
     );
+    main.appendChild(panel);
     return;
   }
 
@@ -1388,25 +1568,28 @@ function renderEventNode(body: HTMLElement, run: RunState): void {
           ? 'ミニ戦闘に挑む'
           : `${out.text} ${out.changes.join(' / ')}`;
         autoSave();
+        if (!out.battleEncounterId) setScreen('nodeTransition');
         render();
       }),
     );
-    body.appendChild(row);
+    panel.appendChild(row);
   });
+  main.appendChild(panel);
 }
 
+/** 「ラン」タブ：進行状況の確認だけ */
 function renderRunTab(body: HTMLElement): void {
   const run = state.run;
 
   if (!run) {
     if (state.savedRun) {
-      const s = state.savedRun;
+      const sv = state.savedRun;
       body.appendChild(h('div', 'hint', '保存されたランがあります。再開しますか？'));
       body.appendChild(
-        h('div', 'run-status', `${s.chapter}章 / ライフ ${s.life} / コイン ${s.coins}`),
+        h('div', 'run-status', `${sv.chapter}章 / ライフ ${sv.life} / コイン ${sv.coins}`),
       );
       const row = h('div', 'row');
-      row.appendChild(btn('再開する', true, () => resumeRun(s)));
+      row.appendChild(btn('再開する', true, () => resumeRun(sv)));
       row.appendChild(btn('破棄して新規', false, abandonRun));
       body.appendChild(row);
       return;
@@ -1419,49 +1602,17 @@ function renderRunTab(body: HTMLElement): void {
     return;
   }
 
-  body.appendChild(
-    h(
-      'div',
-      'run-status',
-      `${run.chapter}章 ／ ♥ ${run.life} ／ ${run.coins}c ／ 前衛${run.frontlineSlots}・サポ${run.supportSlots}`,
-    ),
-  );
-  if (state.runMessage) body.appendChild(h('div', 'hint', state.runMessage));
-
-  if (run.phase === 'clear') {
-    body.appendChild(h('div', 'result win', 'クリア！'));
-    body.appendChild(btn('新しいランを始める', true, startRun));
-    return;
-  }
-  if (run.phase === 'gameover') {
-    body.appendChild(h('div', 'result lose', 'ゲームオーバー'));
-    body.appendChild(btn('新しいランを始める', true, startRun));
-    return;
-  }
-
-  const map = h('div', 'run-map');
-  for (const n of progressMap(run, runCfg)) {
-    map.appendChild(
-      h('span', 'run-node' + (n.done ? ' done' : '') + (n.current ? ' current' : ''), n.label),
-    );
-  }
-  body.appendChild(map);
-
-  const node = currentNode(run, runCfg)!;
-  body.appendChild(h('div', 'hint', `いまのノード: ${NODE_LABEL[node.kind]}`));
-
-  if (node.kind === 'battle' || node.kind === 'boss') {
+  body.appendChild(runHeader(run));
+  if (run.phase === 'node') {
+    body.appendChild(progressMapEl(run));
+    const node = currentNode(run, runCfg)!;
+    body.appendChild(h('div', 'hint', `いまのノード: ${NODE_LABEL[node.kind]}`));
     if (run.bossRetries > 0) {
       body.appendChild(h('div', 'hint err', `章ボスに再挑戦（${run.bossRetries}回目）`));
     }
-    body.appendChild(h('div', 'hint', '「編成」タブで配置を整えてから挑む'));
-    body.appendChild(btn('▶ この戦闘に挑む', true, () => startBattle('runNode')));
-  } else if (node.kind === 'shop' || node.kind === 'bossShop') {
-    renderShopNode(body, run);
-  } else if (node.kind === 'event') {
-    renderEventNode(body, run);
+  } else {
+    body.appendChild(h('div', 'hint', run.phase === 'clear' ? 'クリア済み' : 'ゲームオーバー'));
   }
-
   const foot = h('div', 'row');
   foot.appendChild(btn('ランをやめる', false, abandonRun));
   body.appendChild(foot);
@@ -1584,11 +1735,13 @@ function renderControlTab(body: HTMLElement): void {
 
 function renderBottomBar(root: HTMLElement): void {
   const bar = h('div', 'bottom-bar');
-  const inBattle = state.replay !== null;
+  const inBattle = state.screen === 'battle';
+  // リザルト・ショップ・イベント・進行演出の間は誤操作を防ぐためタブを止める
+  const locked = state.screen !== 'prep';
 
   const tabRow = h('div', 'tab-row');
   for (const t of TABS) {
-    const disabled = inBattle && t.id !== 'control';
+    const disabled = locked && !(inBattle && t.id === 'control');
     const b = btn(
       t.label,
       state.tab === t.id,
@@ -1612,18 +1765,18 @@ function renderBottomBar(root: HTMLElement): void {
   bar.appendChild(body);
 
   const action = h('div', 'action-row');
-  if (!inBattle) {
+  if (state.screen === 'prep') {
     const node = state.run && state.run.phase === 'node' ? currentNode(state.run, runCfg) : null;
     if (node && (node.kind === 'battle' || node.kind === 'boss')) {
       action.appendChild(btn('▶ この戦闘に挑む', true, () => startBattle('runNode'), 'wide'));
     } else {
       action.appendChild(btn('▶ 戦闘開始', true, () => startBattle('sandbox'), 'wide'));
     }
-  } else {
+  } else if (state.screen === 'battle') {
     const rep = state.replay!;
     const atEnd = state.frame >= rep.frames.length - 1;
     if (state.pendingResult && atEnd) {
-      action.appendChild(btn('結果を反映して進む', true, applyRunBattleResult, 'wide'));
+      action.appendChild(btn('結果へ', true, applyRunBattleResult, 'wide'));
     } else {
       action.appendChild(btn('← 編成に戻る', false, backToSetup));
       action.appendChild(
@@ -1640,6 +1793,8 @@ function renderBottomBar(root: HTMLElement): void {
         ),
       );
     }
+  } else {
+    action.appendChild(h('span', 'hint', 'メイン画面の操作を進めてください'));
   }
   bar.appendChild(action);
 
@@ -1853,6 +2008,7 @@ function renderSheets(root: HTMLElement): void {
 function render(): void {
   const root = document.getElementById('app')!;
   root.textContent = '';
+  root.dataset.screen = state.screen;
 
   const header = h('div', 'app-head');
   header.appendChild(h('h1', undefined, 'Divine Pawns（仮題）'));
@@ -1871,9 +2027,21 @@ function render(): void {
   );
   root.appendChild(header);
 
-  const boardArea = h('div', 'board-area');
-  boardArea.appendChild(renderBoard());
-  root.appendChild(boardArea);
+  // メイン画面。盤面を出すのは「戦闘準備中」と「戦闘実行中」だけ
+  const main = h('div', 'board-area');
+  main.dataset.screen = state.screen;
+  if (showsBoard(state.screen)) {
+    main.appendChild(renderBoard());
+  } else if (state.screen === 'result') {
+    renderResultScreen(main);
+  } else if (state.screen === 'nodeTransition') {
+    renderTransitionScreen(main);
+  } else if (state.screen === 'shop') {
+    renderShopScreen(main);
+  } else if (state.screen === 'event') {
+    renderEventScreen(main);
+  }
+  root.appendChild(main);
 
   renderBottomBar(root);
   renderSheets(root);

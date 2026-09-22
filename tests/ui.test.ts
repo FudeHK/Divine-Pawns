@@ -42,6 +42,25 @@ function tabBody(): HTMLElement {
   return app().querySelector('.tab-body')!;
 }
 
+/** メイン画面のモード */
+function screen(): string {
+  return app().dataset.screen ?? '';
+}
+
+function mainArea(): HTMLElement {
+  return app().querySelector('.board-area')!;
+}
+
+function hasBoard(): boolean {
+  return app().querySelector('.board-area svg.board') !== null;
+}
+
+/** カードの装備・スキルを開く */
+function expandCard(): void {
+  const b = card().querySelector('.card-toggle') as HTMLButtonElement;
+  if ((b.textContent ?? '').startsWith('▼')) b.click();
+}
+
 /** スタックされたシート（DOM順＝下から上） */
 function sheets(): HTMLElement[] {
   return [...app().querySelectorAll('.sheet')] as HTMLElement[];
@@ -195,7 +214,7 @@ describe('A2 キャラを1体ずつ表示する', () => {
     expect(app().querySelector('.char-page-indicator')!.textContent).toBe(`3 / ${CHARACTERS.length}`);
   });
 
-  it('カードに必要な要素がそろっている', () => {
+  it('カードに必要な要素がそろっている（閉じた状態は4行）', () => {
     openTab('team');
     const c = card();
     expect(c.querySelector('.char-name')?.textContent).toBeTruthy();
@@ -203,15 +222,28 @@ describe('A2 キャラを1体ずつ表示する', () => {
     expect(c.querySelector('select')).toBeTruthy();
     expect(c.querySelector('.char-slot-state')).toBeTruthy();
     expect(c.querySelectorAll('.char-quick .quick-cell').length).toBe(4);
-    expect(c.querySelectorAll('.skill-icon').length).toBe(3);
-    expect(c.querySelectorAll('.equip-chip').length).toBeGreaterThan(0);
     const labels = [...c.querySelectorAll('button')].map((b) => b.textContent);
     expect(labels).toContain('前衛');
-    expect(labels).toContain('サポート');
+    expect(labels).toContain('サポ');
     expect(labels).toContain('詳細');
+    expect(labels).toContain('配置');
+    // 閉じている間はスキル・装備の行を出さない（縦を詰めるため）
+    expect(c.querySelectorAll('.char-skills').length).toBe(0);
+    // 行は 名前 / 状態 / 操作 / 操作 の4つ
+    expect(c.querySelectorAll('.char-head, .char-line2, .char-sub').length).toBe(4);
     // 名前は1回だけ
     const name = c.querySelector('.char-name')!.textContent!;
     expect((c.textContent ?? '').split(name).length - 1).toBe(1);
+  });
+
+  it('［▼ 装備］を押すとスキルアイコンと装備スロットが出る', () => {
+    openTab('team');
+    expect(card().querySelectorAll('.skill-icon').length).toBe(0);
+    expandCard();
+    expect(card().querySelectorAll('.skill-icon').length).toBe(3);
+    expect(card().querySelectorAll('.equip-chip').length).toBeGreaterThan(0);
+    (card().querySelector('.card-toggle') as HTMLButtonElement).click();
+    expect(card().querySelectorAll('.skill-icon').length).toBe(0);
   });
 
   it('編成状況はページを送っても出ている', () => {
@@ -323,6 +355,7 @@ describe('A1 ポップアップは重ねて開く', () => {
   it('キャラ詳細 → 装備詳細 も同じように重なる', () => {
     pageTo('GRE_A');
     // 装備を1つ着ける
+    expandCard();
     (card().querySelector('.equip-chip') as HTMLButtonElement).click();
     (
       [...app().querySelectorAll('.sheet-list-item')].find((n) =>
@@ -450,6 +483,7 @@ describe('盤面アイコン', () => {
 describe('装備スロット（★の数と同じ）', () => {
   it('★1・★2・★3 でスロットが 1・2・3 になる', () => {
     pageTo('GRE_A');
+    expandCard();
     for (const [star, n] of [
       [1, 1],
       [2, 2],
@@ -465,6 +499,7 @@ describe('装備スロット（★の数と同じ）', () => {
 
   it('★が上がっても既存の装備は残り、増えたスロットに追加できる', () => {
     pageTo('GRE_A');
+    expandCard();
     setStar(1);
     (card().querySelector('.equip-chip') as HTMLButtonElement).click();
     (
@@ -529,18 +564,34 @@ describe('「加護」タブ', () => {
 // ラン進行（UI）
 // ---------------------------------------------------------------------------
 
-describe('「ラン」タブ', () => {
+describe('ラン進行とメイン画面の切り替え', () => {
   function startRun(): void {
     openTab('run');
     findButton('▶ 新しいランを始める')!.click();
   }
 
-  it('ランを始めると、状態と進行マップが出る', () => {
+  /** 戦闘を最後まで飛ばして結果へ */
+  function fightThrough(): void {
+    findButton('▶ この戦闘に挑む')!.click();
+    expect(screen()).toBe('battle');
+    expect(hasBoard()).toBe(true);
+    openTab('control');
+    findButton('⏭ スキップ')!.click();
+    findButton('結果へ')!.click();
+  }
+
+  it('ランを始めると準備画面（盤面あり）になる', () => {
     startRun();
+    expect(screen()).toBe('prep');
+    expect(hasBoard()).toBe(true);
+    expect(findButton('▶ この戦闘に挑む')).toBeTruthy();
+  });
+
+  it('「ラン」タブは進行状況の確認だけになる', () => {
+    startRun();
+    openTab('run');
     expect(tabBody().querySelector('.run-status')!.textContent).toContain('1章');
-    expect(tabBody().querySelector('.run-status')!.textContent).toContain('♥ 3');
-    const nodes = [...tabBody().querySelectorAll('.run-node')].map((n) => n.textContent);
-    expect(nodes).toEqual([
+    expect([...tabBody().querySelectorAll('.run-node')].map((n) => n.textContent)).toEqual([
       '戦闘',
       'ショップ',
       'イベント',
@@ -550,7 +601,74 @@ describe('「ラン」タブ', () => {
       '章ボス',
       'ボスショップ',
     ]);
-    expect(tabBody().querySelector('.run-node.current')!.textContent).toBe('戦闘');
+    // ショップやイベントはタブの中には出ない
+    expect(tabBody().querySelector('.shop-list')).toBeNull();
+    expect(tabBody().querySelector('.event-text')).toBeNull();
+  });
+
+  it('prep → battle → result → nodeTransition → shop → nodeTransition → event と一巡する', () => {
+    startRun();
+    expect(screen()).toBe('prep');
+
+    fightThrough();
+    // リザルトはメイン画面に出る（盤面は出ない）
+    expect(screen()).toBe('result');
+    expect(hasBoard()).toBe(false);
+    expect(mainArea().querySelector('.screen-title')!.textContent).toMatch(/勝利|敗北/);
+
+    findButton('次へ')!.click();
+    expect(screen()).toBe('nodeTransition');
+    expect(hasBoard()).toBe(false);
+    expect(mainArea().querySelector('.run-map.moving')).toBeTruthy();
+
+    findButton('進む')!.click();
+    expect(screen()).toBe('shop');
+    expect(hasBoard()).toBe(false);
+    expect(mainArea().querySelectorAll('.shop-row').length).toBe(6);
+
+    findButton('次へ進む')!.click();
+    expect(screen()).toBe('nodeTransition');
+    findButton('進む')!.click();
+    expect(screen()).toBe('event');
+    expect(hasBoard()).toBe(false);
+    expect(mainArea().querySelector('.event-text')).toBeTruthy();
+
+    const choose = [...mainArea().querySelectorAll('button')].filter(
+      (b) => b.textContent === '選ぶ',
+    );
+    expect(choose).toHaveLength(2);
+    choose[0]!.click();
+    expect(screen()).toBe('nodeTransition');
+    findButton('進む')!.click();
+    // 次は戦闘なので、盤面のある準備画面に戻る
+    expect(screen()).toBe('prep');
+    expect(hasBoard()).toBe(true);
+  });
+
+  it('盤面を出すのは準備中と戦闘中だけ', () => {
+    startRun();
+    const seen: Record<string, boolean> = {};
+    seen[screen()] = hasBoard();
+    fightThrough();
+    seen[screen()] = hasBoard();
+    findButton('次へ')!.click();
+    seen[screen()] = hasBoard();
+    findButton('進む')!.click();
+    seen[screen()] = hasBoard();
+    expect(seen).toMatchObject({ prep: true, result: false, nodeTransition: false, shop: false });
+  });
+
+  it('ショップ／イベント／リザルト中はタブ操作を止める', () => {
+    startRun();
+    fightThrough();
+    expect(screen()).toBe('result');
+    for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
+      expect(tabButton(t).disabled, t).toBe(true);
+    }
+    findButton('次へ')!.click();
+    findButton('進む')!.click();
+    expect(screen()).toBe('shop');
+    expect(tabButton('team').disabled).toBe(true);
   });
 
   it('ラン中は編成が「所持キャラ1体」になる', () => {
@@ -560,48 +678,17 @@ describe('「ラン」タブ', () => {
     expect(card().querySelector('.char-slot-state')!.textContent).toContain('前衛');
   });
 
-  it('戦闘 → 結果を反映 → ショップへ進む', () => {
-    startRun();
-    findButton('▶ この戦闘に挑む')!.click();
-    // スキップして決着まで進める
-    openTab('control');
-    findButton('⏭ スキップ')!.click();
-    findButton('結果を反映して進む')!.click();
-
-    openTab('run');
-    expect(tabBody().querySelector('.run-node.current')!.textContent).toBe('ショップ');
-    expect(tabBody().querySelectorAll('.shop-row').length).toBe(6);
-    expect(findButton('次へ進む')).toBeTruthy();
-  });
-
-  it('ショップから次へ進むとイベントになり、2択が出る', () => {
-    startRun();
-    findButton('▶ この戦闘に挑む')!.click();
-    openTab('control');
-    findButton('⏭ スキップ')!.click();
-    findButton('結果を反映して進む')!.click();
-    openTab('run');
-    findButton('次へ進む')!.click();
-
-    expect(tabBody().querySelector('.run-node.current')!.textContent).toBe('イベント');
-    expect(tabBody().querySelector('.event-title')).toBeTruthy();
-    expect(tabBody().querySelectorAll('.shop-row').length).toBe(2);
-    const choose = [...tabBody().querySelectorAll('button')].filter((b) => b.textContent === '選ぶ');
-    expect(choose).toHaveLength(2);
-    choose[0]!.click();
-    expect(tabBody().querySelector('.run-node.current')!.textContent).toBe('戦闘');
-  });
-
   it('オートセーブされ、読み込み直すと再開を聞かれる', async () => {
     startRun();
     expect(localStorage.getItem('divine-pawns.run.v1')).toBeTruthy();
 
-    // タブを閉じて開き直した想定
     vi.resetModules();
     document.body.innerHTML = '<div id="app"></div>';
     await import('../src/ui/main');
+    openTab('run');
     expect(tabBody().textContent).toContain('保存されたランがあります');
     findButton('再開する')!.click();
+    openTab('run');
     expect(tabBody().querySelector('.run-status')!.textContent).toContain('1章');
   });
 
@@ -619,6 +706,7 @@ describe('「ラン」タブ', () => {
 describe('戦闘再生中', () => {
   it('「編成」「加護」「ラン」タブが無効になり、「操作」だけ使える', () => {
     findButton('▶ 戦闘開始')!.click();
+    expect(screen()).toBe('battle');
     expect(tabButton('team').disabled).toBe(true);
     expect(tabButton('blessing').disabled).toBe(true);
     expect(tabButton('run').disabled).toBe(true);

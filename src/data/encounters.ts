@@ -14,11 +14,12 @@ const raw: EncounterDef[] = [
     units: [{ enemyId: 'en_wisp', pos: { x: 2, y: 2 } }],
   },
   {
+    // 1章の1戦目。開幕は所持キャラ1体なので、誰ひとりでも必ず勝てる強さにする
     id: 'E1',
-    name: '通常戦 1（精鋭2体）',
+    name: '通常戦 1（1章の足慣らし）',
     units: [
-      { enemyId: 'en_soldier', pos: { x: 1, y: 2 }, scale: 1.45 },
-      { enemyId: 'en_bulwark', pos: { x: 3, y: 2 }, scale: 1.45 },
+      { enemyId: 'en_wisp', pos: { x: 1, y: 2 }, scale: 1.2 },
+      { enemyId: 'en_soldier', pos: { x: 3, y: 2 }, scale: 0.28 },
     ],
   },
   {

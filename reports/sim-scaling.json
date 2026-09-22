@@ -21,9 +21,9 @@
         },
         {
           "encounter": "E1",
-          "dps": 188.2,
+          "dps": 230,
           "win": true,
-          "duration": 24.4
+          "duration": 2.9
         },
         {
           "encounter": "E2",
@@ -71,9 +71,9 @@
         },
         {
           "encounter": "E1",
-          "dps": 711.1,
+          "dps": 870.6,
           "win": true,
-          "duration": 8.6
+          "duration": 1.3
         },
         {
           "encounter": "E2",
