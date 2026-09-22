@@ -5,11 +5,13 @@ import {
   attackInterval,
   buildStats,
   collectBlessingMods,
+  equipmentSlots,
   makeBase,
   normalDamage,
   skillStarMul,
 } from '../src/engine/stats';
-import type { EquipmentDef, Stats } from '../src/engine/types';
+import { effectiveEquipment, resolveMembers } from '../src/engine/build';
+import type { EquipmentDef, LoadoutEntry, Star, Stats } from '../src/engine/types';
 import { getEquipment } from '../src/data/equipment';
 import { getBlessing } from '../src/data/blessings';
 
@@ -158,5 +160,68 @@ describe('役割ごとの基本ステータス', () => {
         expect(b.maxHp).toBeLessThan(10000);
       }
     }
+  });
+});
+
+describe('装備スロット（★の数と同じ）', () => {
+  it('★1=1・★2=2・★3=3', () => {
+    expect(equipmentSlots(1)).toBe(1);
+    expect(equipmentSlots(2)).toBe(2);
+    expect(equipmentSlots(3)).toBe(3);
+  });
+
+  it('スロット数を超えた装備は効かない', () => {
+    const power = getEquipment('eq_power'); // 攻撃力 +25
+    const tough = getEquipment('eq_tough'); // HP +350
+    const entry = (star: Star, ids: string[]): LoadoutEntry => ({
+      charId: 'GRE_A',
+      star,
+      equipment: ids,
+      pos: { x: 2, y: 3 },
+    });
+
+    // ★1 は1つだけ効く
+    expect(effectiveEquipment(entry(1, ['eq_power', 'eq_tough'])).map((e) => e.id)).toEqual([
+      power.id,
+    ]);
+    // ★2 は2つとも効く
+    expect(effectiveEquipment(entry(2, ['eq_power', 'eq_tough'])).map((e) => e.id)).toEqual([
+      power.id,
+      tough.id,
+    ]);
+    // 空きスロット（''）は無視される
+    expect(effectiveEquipment(entry(3, ['', 'eq_tough', ''])).map((e) => e.id)).toEqual([tough.id]);
+  });
+
+  it('★を上げるとスロットが増え、追加した装備がステータスに乗る', () => {
+    const base2 = resolveMembers({
+      frontline: [{ charId: 'GRE_A', star: 2, equipment: ['eq_power'], pos: { x: 2, y: 3 } }],
+      support: [],
+      blessings: [],
+    })[0]!.stats;
+    const both2 = resolveMembers({
+      frontline: [
+        { charId: 'GRE_A', star: 2, equipment: ['eq_power', 'eq_tough'], pos: { x: 2, y: 3 } },
+      ],
+      support: [],
+      blessings: [],
+    })[0]!.stats;
+    expect(both2.maxHp).toBeCloseTo(base2.maxHp + 350, 6);
+    expect(both2.atk).toBeCloseTo(base2.atk, 6);
+
+    // ★1 だと2つ目は乗らない
+    const both1 = resolveMembers({
+      frontline: [
+        { charId: 'GRE_A', star: 1, equipment: ['eq_power', 'eq_tough'], pos: { x: 2, y: 3 } },
+      ],
+      support: [],
+      blessings: [],
+    })[0]!.stats;
+    const one1 = resolveMembers({
+      frontline: [{ charId: 'GRE_A', star: 1, equipment: ['eq_power'], pos: { x: 2, y: 3 } }],
+      support: [],
+      blessings: [],
+    })[0]!.stats;
+    expect(both1.maxHp).toBeCloseTo(one1.maxHp, 6);
   });
 });

@@ -11,12 +11,14 @@ import { DEFAULT_CONFIG, type BattleConfig } from './config';
 import {
   buildStats,
   collectBlessingMods,
+  equipmentSlots,
   type BuildContext,
   type BuildIdentity,
 } from './stats';
 import type {
   EffectDef,
   EncounterDef,
+  EquipmentDef,
   Loadout,
   LoadoutEntry,
   Stats,
@@ -24,6 +26,17 @@ import type {
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
+}
+
+/**
+ * 実際に効く装備を返す。
+ * 装備スロットは★の数と同じなので、それを超える分は無視する。
+ */
+export function effectiveEquipment(entry: LoadoutEntry): EquipmentDef[] {
+  return entry.equipment
+    .slice(0, equipmentSlots(entry.star))
+    .filter((id) => id !== '')
+    .map(getEquipment);
 }
 
 export interface BuildOptions {
@@ -56,7 +69,7 @@ export function resolveMembers(loadout: Loadout, cfg: BattleConfig = DEFAULT_CON
   return all.map(({ entry, slot }, i) => {
     const c = getCharacter(entry.charId);
     const identity = roster[i]!;
-    const equipment = entry.equipment.map(getEquipment);
+    const equipment = effectiveEquipment(entry);
     const extraMods = collectBlessingMods(blessings, identity, ctx);
     const stats = buildStats({
       base: c.base,
@@ -82,7 +95,7 @@ export function buildBattleSetup(
   let supIdx = 0;
   for (const m of members) {
     const c = getCharacter(m.entry.charId);
-    const equipment = m.entry.equipment.map(getEquipment);
+    const equipment = effectiveEquipment(m.entry);
     const effects: { def: EffectDef; origin: string }[] = [];
 
     if (m.slot === 'frontline') {

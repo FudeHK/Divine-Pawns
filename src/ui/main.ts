@@ -1,7 +1,9 @@
 /**
- * フェーズ1の検証用の最小画面。
- * 縦画面（幅360〜430px）で、遭遇を選ぶ → 前衛／サポートに割り当てる → 配置 → 開始 → 再生。
- * 盤面アイコンをタップすると詳細シートが開く。
+ * Divine Pawns（仮題）の検証用画面。
+ *
+ * 画面は2層。
+ *   上: 盤面（常に見える。残りの高さいっぱい）
+ *   下: タブ付きの操作バー（編成 / 加護 / 操作）＋ いつでも押せる実行ボタン
  */
 
 import './style.css';
@@ -14,6 +16,7 @@ import { EQUIPMENT, getEquipment } from '../data/equipment';
 import { buildBattleSetup, resolveMembers } from '../engine/build';
 import { DEFAULT_CONFIG } from '../engine/config';
 import { ALLY_CELLS, ALL_CELLS, isCellOfSide } from '../engine/hex';
+import { equipmentSlots } from '../engine/stats';
 import type {
   CharacterDef,
   DebuffKind,
@@ -36,11 +39,13 @@ import { buildReplay, type Replay } from './replay';
 // ---------------------------------------------------------------------------
 
 type Slot = 'none' | 'frontline' | 'support';
+type Tab = 'team' | 'blessing' | 'control';
 
 interface Assignment {
   slot: Slot;
   star: Star;
-  equipment: string;
+  /** 装備。添字がスロット番号。空きは '' */
+  equipment: string[];
   pos: Hex | null;
 }
 
@@ -53,12 +58,17 @@ type DetailTarget =
 /** 画面下から開くシート。重ねて開ける（閉じると1つ上の階層に戻る） */
 type Sheet =
   | { kind: 'detail'; target: DetailTarget }
-  | { kind: 'equip'; charId: string }
-  /** 所持中の加護の一覧 */
+  | { kind: 'equip'; charId: string; slot: number }
   | { kind: 'blessings' }
   | { kind: 'explain'; title: string; text: string };
 
 const team = DEFAULT_CONFIG.team;
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'team', label: '編成' },
+  { id: 'blessing', label: '加護' },
+  { id: 'control', label: '操作' },
+];
 
 const state = {
   seed: 'seed-1',
@@ -71,14 +81,13 @@ const state = {
   frame: 0,
   playing: false,
   speed: 1 as 1 | 2 | 4,
-  /** 重ねて開けるシート（最後が一番手前） */
+  tab: 'team' as Tab,
   sheets: [] as Sheet[],
-  /** シートを開く直前に再生中だったか */
   resumeAfterSheet: false,
 };
 
 for (const c of CHARACTERS) {
-  state.assign.set(c.id, { slot: 'none', star: 1, equipment: '', pos: null });
+  state.assign.set(c.id, { slot: 'none', star: 1, equipment: [], pos: null });
 }
 const initial: [string, Slot, Hex | null][] = [
   ['GRE_A', 'frontline', { x: 2, y: 3 }],
@@ -171,6 +180,19 @@ function enemyDupIndexes(): (number | null)[] {
   });
 }
 
+/** 装備スロットの一覧（★の数だけ。空きは ''） */
+function slotsOf(a: Assignment): string[] {
+  const n = equipmentSlots(a.star);
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) out.push(a.equipment[i] ?? '');
+  return out;
+}
+
+/** 実際に着けている装備の数 */
+function equippedCount(a: Assignment): number {
+  return slotsOf(a).filter((x) => x !== '').length;
+}
+
 // ---------------------------------------------------------------------------
 // 編成の組み立て
 // ---------------------------------------------------------------------------
@@ -184,7 +206,7 @@ function currentLoadout(): Loadout {
     const e = {
       charId: c.id,
       star: a.star,
-      equipment: a.equipment ? [a.equipment] : [],
+      equipment: slotsOf(a).filter((x) => x !== ''),
       pos: a.pos ?? undefined,
     };
     if (a.slot === 'frontline') frontline.push(e);
@@ -336,6 +358,7 @@ function drawToken(
 function renderBoard(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', `0 0 ${BOARD_W.toFixed(2)} ${BOARD_H.toFixed(2)}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   svg.setAttribute('class', 'board');
 
   const rep = state.replay;
@@ -345,11 +368,12 @@ function renderBoard(): SVGSVGElement {
     const { cx, cy } = hexCenter(cell);
     const isAlly = cell.y >= 3;
     const occ = occupiedBy(cell);
+    const placing = !rep && state.selected !== null && isAlly;
     const p = el('polygon', {
       points: hexPoints(cx, cy, R * 0.95),
-      fill: isAlly ? '#182231' : '#291a1d',
-      stroke: occ && !rep ? '#ffcc52' : '#3a3f52',
-      'stroke-width': 1.5,
+      fill: isAlly ? (placing ? '#1d3149' : '#182231') : '#291a1d',
+      stroke: placing ? '#ffcc52' : occ && !rep ? '#ffcc52' : '#3a3f52',
+      'stroke-width': placing ? 2 : 1.5,
     });
     if (!rep && isAlly) {
       p.setAttribute('style', 'cursor:pointer');
@@ -478,7 +502,7 @@ function onCellTap(cell: Hex): void {
     const occ = occupiedBy(cell);
     if (occ) openSheet({ kind: 'detail', target: { kind: 'char', charId: occ } });
     else {
-      state.message = '先にキャラを選んでください';
+      state.message = '「編成」タブでキャラを選んでから、マスをタップ';
       render();
     }
     return;
@@ -500,6 +524,7 @@ function setSlot(charId: string, slot: Slot): void {
   if (a.slot === slot) {
     a.slot = 'none';
     a.pos = null;
+    if (state.selected === charId) state.selected = null;
   } else {
     if (slot === 'frontline' && countSlot('frontline') >= team.frontlineSlotsMax && a.slot !== 'frontline') {
       state.message = `前衛は最大 ${team.frontlineSlotsMax} 体です`;
@@ -516,13 +541,16 @@ function setSlot(charId: string, slot: Slot): void {
       const free = ALLY_CELLS.find((c) => !occupiedBy(c));
       a.pos = free ? { ...free } : null;
     }
-    if (slot === 'support') a.pos = null;
+    if (slot === 'support') {
+      a.pos = null;
+      if (state.selected === charId) state.selected = null;
+    }
   }
   state.message = '';
   render();
 }
 
-// --- シートの開閉 ---
+// --- シートの開閉（重ねて開く。閉じると1つ上の階層に戻る） ---
 
 function openSheet(s: Sheet): void {
   if (state.sheets.length === 0) {
@@ -534,19 +562,19 @@ function openSheet(s: Sheet): void {
   render();
 }
 
+/** 同じ階層のまま中身だけ差し替える（装備スロットの切り替えなど） */
+function replaceSheet(s: Sheet): void {
+  if (state.sheets.length === 0) state.sheets.push(s);
+  else state.sheets[state.sheets.length - 1] = s;
+  render();
+}
+
 function closeTopSheet(): void {
   state.sheets.pop();
   if (state.sheets.length === 0) {
     if (state.replay && state.resumeAfterSheet) state.playing = true;
     state.resumeAfterSheet = false;
   }
-  render();
-}
-
-function closeAllSheets(): void {
-  state.sheets.length = 0;
-  if (state.replay && state.resumeAfterSheet) state.playing = true;
-  state.resumeAfterSheet = false;
   render();
 }
 
@@ -569,9 +597,12 @@ function startBattle(): void {
   state.replay = buildReplay(setup);
   state.frame = 0;
   state.playing = true;
+  state.selected = null;
   state.sheets.length = 0;
   state.resumeAfterSheet = false;
   state.message = '';
+  // 戦闘中は「編成」「加護」を触れないので、操作タブへ移す
+  state.tab = 'control';
   render();
 }
 
@@ -581,6 +612,7 @@ function backToSetup(): void {
   state.frame = 0;
   state.sheets.length = 0;
   state.resumeAfterSheet = false;
+  state.tab = 'team';
   render();
 }
 
@@ -599,7 +631,8 @@ interface DetailView {
   id: string;
   tags: { text: string; cls?: string }[];
   rows: [string, string][];
-  equipment: string | null;
+  /** 装備スロット（★の数だけ。空きは ''） */
+  equipment: string[];
   skills: SkillRow[];
 }
 
@@ -614,7 +647,6 @@ function statRows(s: Stats, hpNow: number | null, manaNow: number | null): [stri
   ];
 }
 
-/** 「共闘の熱(3)」のような段階つきの名前から段階を落とす */
 function baseEffectName(name: string): string {
   return name.replace(/\(\d+\)$/, '');
 }
@@ -671,7 +703,12 @@ function buildDetailView(target: DetailTarget): DetailView | null {
     else {
       stats = resolveMembers({
         frontline: [
-          { charId: c.id, star: a.star, equipment: a.equipment ? [a.equipment] : [], pos: { x: 2, y: 3 } },
+          {
+            charId: c.id,
+            star: a.star,
+            equipment: slotsOf(a).filter((x) => x !== ''),
+            pos: { x: 2, y: 3 },
+          },
         ],
         support: [],
         blessings: [],
@@ -688,7 +725,7 @@ function buildDetailView(target: DetailTarget): DetailView | null {
         { text: a.slot === 'frontline' ? '前衛' : a.slot === 'support' ? 'サポート' : '未編成' },
       ],
       rows: statRows(stats, null, null),
-      equipment: a.equipment,
+      equipment: slotsOf(a),
       skills: charSkills(c),
     };
   }
@@ -710,7 +747,7 @@ function buildDetailView(target: DetailTarget): DetailView | null {
         { text: def.isBoss ? 'ボス' : '敵' },
       ],
       rows: [...statRows(stats, null, null), ['耐性', `${Math.round(def.resist * 100)}%`]],
-      equipment: null,
+      equipment: [],
       skills: enemySkills(def),
     };
   }
@@ -743,7 +780,7 @@ function buildDetailView(target: DetailTarget): DetailView | null {
       ...(uf.shield > 0 ? ([['シールド', formatNumber(uf.shield)]] as [string, string][]) : []),
       ['デバフ', debuffRow(uf.debuffs)],
     ],
-    equipment: a ? a.equipment : null,
+    equipment: a ? slotsOf(a) : [],
     skills: c ? charSkills(c) : e ? enemySkills(e) : [],
   };
 }
@@ -780,7 +817,7 @@ function loop(ts: number): void {
 requestAnimationFrame(loop);
 
 // ---------------------------------------------------------------------------
-// 画面
+// 部品
 // ---------------------------------------------------------------------------
 
 function h(tag: string, cls?: string, text?: string): HTMLElement {
@@ -798,72 +835,53 @@ function btn(label: string, on: boolean, fn: () => void, cls = ''): HTMLButtonEl
   return b;
 }
 
-function renderSetup(root: HTMLElement): void {
-  const seedPanel = h('div', 'panel');
-  seedPanel.appendChild(h('h2', undefined, 'シード'));
-  const seedInput = document.createElement('input');
-  seedInput.type = 'text';
-  seedInput.value = state.seed;
-  seedInput.addEventListener('input', () => {
-    state.seed = seedInput.value;
-  });
-  seedPanel.appendChild(seedInput);
-  root.appendChild(seedPanel);
+// ---------------------------------------------------------------------------
+// 「編成」タブ
+// ---------------------------------------------------------------------------
 
-  root.appendChild(h('h2', undefined, '遭遇'));
-  const encRow = h('div', 'row');
-  for (const e of ENCOUNTERS) {
-    encRow.appendChild(
-      btn(e.id, state.encounterId === e.id, () => {
-        state.encounterId = e.id;
-        state.sheets.length = 0;
-        render();
-      }),
-    );
-  }
-  root.appendChild(encRow);
-  root.appendChild(h('div', 'hint', getEncounter(state.encounterId).name));
-
-  root.appendChild(
-    h(
-      'h2',
-      undefined,
-      `配置（前衛 ${countSlot('frontline')}/${team.frontlineSlotsDefault}・サポート ${countSlot('support')}/${team.supportSlotsDefault}）`,
-    ),
-  );
-  root.appendChild(renderBoard());
-  root.appendChild(
+function renderTeamTab(body: HTMLElement): void {
+  body.appendChild(
     h(
       'div',
-      'hint' + (validateLoadout() ? ' err' : ''),
+      'hint',
       state.message ||
         validateLoadout() ||
-        'アイコンをタップで詳細。キャラを選んでからマスをタップで配置',
+        (state.selected
+          ? `${getCharacter(state.selected).name} を置くマスを盤面でタップ`
+          : `前衛 ${countSlot('frontline')}/${team.frontlineSlotsDefault}・サポート ${countSlot('support')}/${team.supportSlotsDefault}`),
     ),
   );
 
-  root.appendChild(h('h2', undefined, 'キャラ'));
+  const list = h('div', 'char-list');
   for (const c of CHARACTERS) {
     const a = state.assign.get(c.id)!;
-    const card = h('div', 'char' + (state.selected === c.id ? ' selected' : ''));
+    const card = h(
+      'div',
+      ['char', `slot-${a.slot}`, state.selected === c.id ? 'selected' : ''].filter(Boolean).join(' '),
+    );
 
-    // 1行目: 名前 ＋ 属性・役割のチップ
     const head = h('div', 'char-head');
     const name = h('div', 'char-name', c.name);
     name.addEventListener('click', () => {
-      state.selected = state.selected === c.id ? null : c.id;
-      state.message = state.selected ? '置きたいマスをタップ' : '';
+      if (a.slot === 'frontline') {
+        // 前衛カードをタップ → 盤面で置く場所を選ぶモード
+        state.selected = state.selected === c.id ? null : c.id;
+        state.message = state.selected ? '盤面のマスをタップして配置' : '';
+      } else {
+        openSheet({ kind: 'detail', target: { kind: 'char', charId: c.id } });
+      }
       render();
     });
     head.appendChild(name);
-    head.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
-    head.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
     card.appendChild(head);
 
-    // 2行目: ID
+    const tags = h('div', 'char-tags');
+    tags.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
+    tags.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
+    card.appendChild(tags);
+
     card.appendChild(h('div', 'char-id', c.id));
 
-    // 3行目: 枠トグル・★・装備・詳細
     const sub = h('div', 'char-sub');
     sub.appendChild(btn('前衛', a.slot === 'frontline', () => setSlot(c.id, 'frontline')));
     sub.appendChild(btn('サポート', a.slot === 'support', () => setSlot(c.id, 'support')));
@@ -877,45 +895,52 @@ function renderSetup(root: HTMLElement): void {
       starSel.appendChild(o);
     }
     starSel.addEventListener('change', () => {
+      // ★が上がってもすでに着けている装備はそのまま残す
       a.star = Number(starSel.value) as Star;
       render();
     });
     sub.appendChild(starSel);
 
     sub.appendChild(
-      btn(a.equipment ? getEquipment(a.equipment).name : '装備なし', false, () =>
-        openSheet({ kind: 'equip', charId: c.id }),
+      btn(`装備 ${equippedCount(a)}/${equipmentSlots(a.star)}`, equippedCount(a) > 0, () =>
+        openSheet({ kind: 'equip', charId: c.id, slot: firstOpenSlot(a) }),
       ),
     );
     sub.appendChild(
       btn('詳細', false, () => openSheet({ kind: 'detail', target: { kind: 'char', charId: c.id } })),
     );
+    card.appendChild(sub);
 
     if (a.slot === 'frontline' && a.pos) {
-      sub.appendChild(h('span', 'stat', `(${a.pos.x},${a.pos.y})`));
+      card.appendChild(h('div', 'stat', `位置 (${a.pos.x},${a.pos.y})`));
     }
-    card.appendChild(sub);
-    root.appendChild(card);
+    list.appendChild(card);
   }
+  body.appendChild(list);
+}
 
-  // 加護（所持中のものが上、名前・1行の説明・レア度・［説明］）
-  root.appendChild(h('h2', undefined, `加護（所持 ${state.blessings.size}）`));
-  const blSection = h('div', 'blessings');
-  const sorted = [...BLESSINGS].sort((a, b) => {
-    const oa = state.blessings.has(a.id) ? 0 : 1;
-    const ob = state.blessings.has(b.id) ? 0 : 1;
-    return oa - ob;
-  });
-  for (const b of sorted) {
-    const owned = state.blessings.has(b.id);
-    const row = h('div', 'blessing-row' + (owned ? ' owned' : ''));
-    const col = h('div', 'blessing-main');
-    const head = h('div', 'blessing-head');
-    head.appendChild(h('span', 'blessing-name', b.name));
-    head.appendChild(h('span', `tag rarity-${b.rarity}`, RARITY_LABEL[b.rarity]));
-    col.appendChild(head);
-    col.appendChild(h('div', 'blessing-desc', b.desc));
-    row.appendChild(col);
+function firstOpenSlot(a: Assignment): number {
+  const s = slotsOf(a);
+  const i = s.findIndex((x) => x === '');
+  return i < 0 ? 0 : i;
+}
+
+// ---------------------------------------------------------------------------
+// 「加護」タブ
+// ---------------------------------------------------------------------------
+
+function blessingRow(id: string, withToggle: boolean): HTMLElement {
+  const b = BLESSINGS.find((x) => x.id === id)!;
+  const owned = state.blessings.has(b.id);
+  const row = h('div', 'blessing-row' + (owned ? ' owned' : ''));
+  const col = h('div', 'blessing-main');
+  const head = h('div', 'blessing-head');
+  head.appendChild(h('span', 'blessing-name', b.name));
+  head.appendChild(h('span', `tag rarity-${b.rarity}`, RARITY_LABEL[b.rarity]));
+  col.appendChild(head);
+  col.appendChild(h('div', 'blessing-desc', b.desc));
+  row.appendChild(col);
+  if (withToggle) {
     row.appendChild(
       btn(owned ? '所持' : '入手', owned, () => {
         if (owned) state.blessings.delete(b.id);
@@ -923,27 +948,88 @@ function renderSetup(root: HTMLElement): void {
         render();
       }),
     );
-    row.appendChild(
-      btn('説明', false, () => openSheet({ kind: 'explain', title: b.name, text: b.summary })),
-    );
-    blSection.appendChild(row);
   }
-  root.appendChild(blSection);
+  row.appendChild(
+    btn('説明', false, () => openSheet({ kind: 'explain', title: b.name, text: b.summary })),
+  );
+  return row;
 }
 
-function renderBattle(root: HTMLElement): void {
-  const rep = state.replay!;
+function renderBlessingTab(body: HTMLElement): void {
+  body.appendChild(h('div', 'hint', `所持 ${state.blessings.size} / ${BLESSINGS.length}`));
+  const section = h('div', 'blessings');
+  const sorted = [...BLESSINGS].sort(
+    (a, b) => (state.blessings.has(a.id) ? 0 : 1) - (state.blessings.has(b.id) ? 0 : 1),
+  );
+  for (const b of sorted) section.appendChild(blessingRow(b.id, true));
+  body.appendChild(section);
+}
+
+// ---------------------------------------------------------------------------
+// 「操作」タブ
+// ---------------------------------------------------------------------------
+
+function renderControlTab(body: HTMLElement): void {
+  const rep = state.replay;
+
+  // 倍速とスキップ（戦闘中も操作できる）
+  body.appendChild(h('div', 'hint', '再生'));
+  const play = h('div', 'row');
+  for (const s of [1, 2, 4] as const) {
+    play.appendChild(
+      btn(`${s}倍`, state.speed === s, () => {
+        state.speed = s;
+        render();
+      }),
+    );
+  }
+  play.appendChild(
+    btn(
+      '⏭ スキップ',
+      false,
+      () => {
+        if (!rep) return;
+        state.frame = rep.frames.length - 1;
+        state.playing = false;
+        state.resumeAfterSheet = false;
+        render();
+      },
+      rep ? '' : 'disabled-look',
+    ),
+  );
+  if (!rep) (play.lastChild as HTMLButtonElement).disabled = true;
+  body.appendChild(play);
+
+  // 遭遇とシード（準備中のみ変更できる）
+  body.appendChild(h('div', 'hint', '遭遇'));
+  const encRow = h('div', 'row');
+  for (const e of ENCOUNTERS) {
+    const b = btn(e.id, state.encounterId === e.id, () => {
+      state.encounterId = e.id;
+      state.sheets.length = 0;
+      render();
+    });
+    if (rep) b.disabled = true;
+    encRow.appendChild(b);
+  }
+  body.appendChild(encRow);
+  body.appendChild(h('div', 'hint', getEncounter(state.encounterId).name));
+
+  body.appendChild(h('div', 'hint', 'シード'));
+  const seedInput = document.createElement('input');
+  seedInput.type = 'text';
+  seedInput.value = state.seed;
+  seedInput.disabled = rep !== null;
+  seedInput.addEventListener('input', () => {
+    state.seed = seedInput.value;
+  });
+  body.appendChild(seedInput);
+
+  if (!rep) return;
+
+  // 戦闘中は、結果・ユニット・ログもここで見る
   const frame = rep.frames[Math.min(state.frame, rep.frames.length - 1)]!;
   const atEnd = state.frame >= rep.frames.length - 1;
-
-  const top = h('div', 'row');
-  top.appendChild(btn('← 編成に戻る', false, backToSetup));
-  top.appendChild(h('span', 'stat', `${state.encounterId} / seed: ${state.seed}`));
-  root.appendChild(top);
-
-  root.appendChild(h('div', 'hint', `t = ${frame.t.toFixed(1)}s`));
-  root.appendChild(renderBoard());
-
   if (atEnd) {
     const label =
       rep.outcome === 'win'
@@ -953,10 +1039,10 @@ function renderBattle(root: HTMLElement): void {
           : rep.outcome === 'draw'
             ? '引き分け'
             : '時間切れ（敗北扱い）';
-    root.appendChild(h('div', `result ${rep.outcome}`, `${label} ／ ${rep.duration.toFixed(1)}s`));
+    body.appendChild(h('div', `result ${rep.outcome}`, `${label} ／ ${rep.duration.toFixed(1)}s`));
   }
 
-  root.appendChild(h('h2', undefined, 'ユニット（タップで詳細）'));
+  body.appendChild(h('div', 'hint', 'ユニット（タップで詳細）'));
   const byId = new Map(rep.units.map((u) => [u.id, u]));
   for (const uf of frame.units) {
     const u = byId.get(uf.id)!;
@@ -976,14 +1062,12 @@ function renderBattle(root: HTMLElement): void {
     line.addEventListener('click', () =>
       openSheet({ kind: 'detail', target: { kind: 'unit', unitId: u.id } }),
     );
-    root.appendChild(line);
+    body.appendChild(line);
   }
 
-  root.appendChild(h('h2', undefined, 'ログ'));
-  root.appendChild(h('div', 'hint', `${rep.events.length} 件・hash ${rep.logHash}`));
+  body.appendChild(h('div', 'hint', `ログ ${rep.events.length} 件・hash ${rep.logHash}`));
   const logBox = h('div', 'log');
-  const shown = rep.events.filter((e) => e.t <= frame.t + 1e-6);
-  for (const e of shown.slice(-400)) {
+  for (const e of rep.events.filter((x) => x.t <= frame.t + 1e-6).slice(-400)) {
     const d = h('div');
     const parts: string[] = [e.type];
     if (e.actor) parts.push(e.actor);
@@ -997,47 +1081,68 @@ function renderBattle(root: HTMLElement): void {
     d.appendChild(h('span', e.actor?.startsWith('E') ? 'e' : 'a', parts.join(' ')));
     logBox.appendChild(d);
   }
-  root.appendChild(logBox);
+  body.appendChild(logBox);
   logBox.scrollTop = logBox.scrollHeight;
 }
 
-/** 画面下部の固定バー */
+// ---------------------------------------------------------------------------
+// 下部バー
+// ---------------------------------------------------------------------------
+
 function renderBottomBar(root: HTMLElement): void {
   const bar = h('div', 'bottom-bar');
-  if (!state.replay) {
-    bar.appendChild(btn('▶ 戦闘開始', true, startBattle, 'wide'));
+  const inBattle = state.replay !== null;
+
+  // タブ（戦闘中は「編成」「加護」を触れない）
+  const tabRow = h('div', 'tab-row');
+  for (const t of TABS) {
+    const disabled = inBattle && t.id !== 'control';
+    const b = btn(t.label, state.tab === t.id, () => {
+      state.tab = t.id;
+      render();
+    }, 'tab');
+    b.disabled = disabled;
+    b.setAttribute('data-tab', t.id);
+    tabRow.appendChild(b);
+  }
+  bar.appendChild(tabRow);
+
+  const body = h('div', 'tab-body');
+  if (state.tab === 'team') renderTeamTab(body);
+  else if (state.tab === 'blessing') renderBlessingTab(body);
+  else renderControlTab(body);
+  bar.appendChild(body);
+
+  // 実行ボタン（タブに関わらず常に見える）
+  const action = h('div', 'action-row');
+  if (!inBattle) {
+    action.appendChild(btn('▶ 戦闘開始', true, startBattle, 'wide'));
   } else {
-    const rep = state.replay;
+    const rep = state.replay!;
     const atEnd = state.frame >= rep.frames.length - 1;
-    bar.appendChild(
-      btn(state.playing ? '⏸ 一時停止' : '▶ 再生', state.playing, () => {
-        if (atEnd) state.frame = 0;
-        state.playing = !state.playing;
-        state.resumeAfterSheet = false;
-        render();
-      }),
-    );
-    for (const s of [1, 2, 4] as const) {
-      bar.appendChild(
-        btn(`${s}倍`, state.speed === s, () => {
-          state.speed = s;
+    action.appendChild(btn('← 編成に戻る', false, backToSetup));
+    action.appendChild(
+      btn(
+        state.playing ? '⏸ 一時停止' : '▶ 再生',
+        state.playing,
+        () => {
+          if (atEnd) state.frame = 0;
+          state.playing = !state.playing;
+          state.resumeAfterSheet = false;
           render();
-        }),
-      );
-    }
-    bar.appendChild(
-      btn('⏭ スキップ', false, () => {
-        state.frame = rep.frames.length - 1;
-        state.playing = false;
-        state.resumeAfterSheet = false;
-        render();
-      }),
+        },
+        'wide',
+      ),
     );
   }
+  bar.appendChild(action);
+
   root.appendChild(bar);
 }
 
-// --- シートの描画 ---
+// ---------------------------------------------------------------------------
+// シート
+// ---------------------------------------------------------------------------
 
 function sheetShell(title: string, small = false): { wrap: DocumentFragment; body: HTMLElement } {
   const wrap = document.createDocumentFragment();
@@ -1062,7 +1167,6 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
   }
   const { wrap, body } = sheetShell(view.title);
   body.classList.add('detail');
-  // タイトルは .detail-title としても引けるようにする
   body.querySelector('.sheet-title')!.classList.add('detail-title');
 
   body.appendChild(h('div', 'char-id', view.id));
@@ -1078,17 +1182,26 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
   }
   body.appendChild(grid);
 
-  // 装備
-  const eqRow = h('div', 'skill');
-  eqRow.appendChild(h('span', 'skill-label', '装備'));
-  const eqDef = view.equipment ? getEquipment(view.equipment) : null;
-  eqRow.appendChild(h('span', 'skill-name', eqDef ? eqDef.name : '装備なし'));
-  if (eqDef) {
-    eqRow.appendChild(
-      btn('説明', false, () => openSheet({ kind: 'explain', title: eqDef.name, text: eqDef.desc })),
-    );
+  // 装備（スロット数ぶん並べる）
+  if (view.equipment.length === 0) {
+    const row = h('div', 'equip-row');
+    row.appendChild(h('span', 'equip-label', '装備'));
+    row.appendChild(h('span', 'equip-name', 'なし'));
+    body.appendChild(row);
+  } else {
+    view.equipment.forEach((id, i) => {
+      const row = h('div', 'equip-row');
+      row.appendChild(h('span', 'equip-label', `装備${i + 1}`));
+      const def = id ? getEquipment(id) : null;
+      row.appendChild(h('span', 'equip-name', def ? def.name : '装備なし'));
+      if (def) {
+        row.appendChild(
+          btn('説明', false, () => openSheet({ kind: 'explain', title: def.name, text: def.desc })),
+        );
+      }
+      body.appendChild(row);
+    });
   }
-  body.appendChild(eqRow);
 
   // チーム全体（所持中の加護）
   const teamRow = h('div', 'skill team-row');
@@ -1099,7 +1212,6 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
   teamRow.appendChild(btn('一覧', false, () => openSheet({ kind: 'blessings' })));
   body.appendChild(teamRow);
 
-  // スキル3行
   for (const s of view.skills) {
     const line = h('div', 'skill');
     line.appendChild(h('span', 'skill-label', s.label));
@@ -1115,23 +1227,41 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
   root.appendChild(wrap);
 }
 
-function renderEquipSheet(root: HTMLElement, charId: string): void {
+function renderEquipSheet(root: HTMLElement, charId: string, slot: number): void {
   const c = getCharacter(charId);
   const a = state.assign.get(charId)!;
+  const slots = slotsOf(a);
+  const cur = Math.min(Math.max(0, slot), slots.length - 1);
   const { wrap, body } = sheetShell(`${c.name} の装備`);
+  body.classList.add('equip');
+
+  // スロットを★の数だけ横並びで表示
+  const slotRow = h('div', 'equip-slots');
+  slots.forEach((id, i) => {
+    const label = id ? getEquipment(id).name : '装備なし';
+    const b = btn(`${i + 1}. ${label}`, i === cur, () =>
+      replaceSheet({ kind: 'equip', charId, slot: i }),
+    );
+    b.classList.add('equip-slot');
+    slotRow.appendChild(b);
+  });
+  body.appendChild(slotRow);
+  body.appendChild(h('div', 'hint', `スロット ${cur + 1} に着ける装備を選ぶ（★${a.star} → ${slots.length}枠）`));
 
   const choose = (id: string): void => {
-    a.equipment = id;
+    const next = slotsOf(a);
+    next[cur] = id;
+    a.equipment = next;
     closeTopSheet();
   };
 
-  const none = h('button', 'sheet-list-item' + (a.equipment === '' ? ' on' : ''));
+  const none = h('button', 'sheet-list-item' + (slots[cur] === '' ? ' on' : ''));
   none.appendChild(h('span', 'li-name', '装備なし'));
   none.addEventListener('click', () => choose(''));
   body.appendChild(none);
 
   for (const e of EQUIPMENT) {
-    const item = h('button', 'sheet-list-item' + (a.equipment === e.id ? ' on' : ''));
+    const item = h('button', 'sheet-list-item' + (slots[cur] === e.id ? ' on' : ''));
     const col = h('div');
     col.appendChild(h('div', 'li-name', e.name));
     col.appendChild(h('div', 'li-desc', e.desc));
@@ -1142,41 +1272,18 @@ function renderEquipSheet(root: HTMLElement, charId: string): void {
   root.appendChild(wrap);
 }
 
-/** 所持中の加護の一覧（1行の説明とレア度つき） */
-function blessingListRows(parent: HTMLElement, owned: boolean): void {
-  const list = BLESSINGS.filter((b) => (owned ? state.blessings.has(b.id) : true));
-  if (list.length === 0) {
-    parent.appendChild(h('div', 'hint', '加護をまだ持っていません'));
-    return;
-  }
-  for (const b of list) {
-    const row = h('div', 'blessing-row' + (state.blessings.has(b.id) ? ' owned' : ''));
-    const col = h('div', 'blessing-main');
-    const head = h('div', 'blessing-head');
-    head.appendChild(h('span', 'blessing-name', b.name));
-    head.appendChild(h('span', `tag rarity-${b.rarity}`, RARITY_LABEL[b.rarity]));
-    col.appendChild(head);
-    col.appendChild(h('div', 'blessing-desc', b.desc));
-    row.appendChild(col);
-    row.appendChild(
-      btn('説明', false, () => openSheet({ kind: 'explain', title: b.name, text: b.summary })),
-    );
-    parent.appendChild(row);
-  }
-}
-
 function renderBlessingsSheet(root: HTMLElement): void {
   const { wrap, body } = sheetShell('チーム全体の加護');
   body.classList.add('blessings');
-  blessingListRows(body, true);
+  const owned = BLESSINGS.filter((b) => state.blessings.has(b.id));
+  if (owned.length === 0) body.appendChild(h('div', 'hint', '加護をまだ持っていません'));
+  for (const b of owned) body.appendChild(blessingRow(b.id, false));
   root.appendChild(wrap);
 }
 
 function renderExplainSheet(root: HTMLElement, title: string, text: string): void {
   const { wrap, body } = sheetShell(title, true);
-  for (const line of text.split('\n')) {
-    body.appendChild(h('div', 'sheet-text', line));
-  }
+  for (const line of text.split('\n')) body.appendChild(h('div', 'sheet-text', line));
   root.appendChild(wrap);
 }
 
@@ -1184,21 +1291,39 @@ function renderSheets(root: HTMLElement): void {
   const top = state.sheets[state.sheets.length - 1];
   if (!top) return;
   if (top.kind === 'detail') renderDetailSheet(root, top.target);
-  else if (top.kind === 'equip') renderEquipSheet(root, top.charId);
+  else if (top.kind === 'equip') renderEquipSheet(root, top.charId, top.slot);
   else if (top.kind === 'blessings') renderBlessingsSheet(root);
   else renderExplainSheet(root, top.title, top.text);
 }
 
+// ---------------------------------------------------------------------------
+// 画面
+// ---------------------------------------------------------------------------
+
 function render(): void {
   const root = document.getElementById('app')!;
   root.textContent = '';
-  root.appendChild(h('h1', undefined, 'Divine Pawns（仮題） 戦闘検証'));
-  if (state.replay) renderBattle(root);
-  else renderSetup(root);
+
+  const header = h('div', 'app-head');
+  header.appendChild(h('h1', undefined, 'Divine Pawns（仮題） 戦闘検証'));
+  const rep = state.replay;
+  header.appendChild(
+    h(
+      'span',
+      'stat',
+      rep
+        ? `${state.encounterId} t=${rep.frames[Math.min(state.frame, rep.frames.length - 1)]!.t.toFixed(1)}s`
+        : `${state.encounterId} / ${state.seed}`,
+    ),
+  );
+  root.appendChild(header);
+
+  const boardArea = h('div', 'board-area');
+  boardArea.appendChild(renderBoard());
+  root.appendChild(boardArea);
+
   renderBottomBar(root);
   renderSheets(root);
 }
 
 render();
-
-export { closeAllSheets };

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T07:29:06.386Z",
+  "generatedAt": "2026-09-22T07:45:10.026Z",
   "determinism": {
     "total": 1000,
     "matched": 1000,
@@ -339,8 +339,8 @@
   },
   "perf": {
     "battles": 10000,
-    "seconds": 15.81,
-    "battlesPerSecond": 632.3,
+    "seconds": 16.27,
+    "battlesPerSecond": 614.7,
     "avgTicksPerBattle": 123.9,
     "avgDuration": 12.39,
     "logging": true

@@ -367,6 +367,7 @@ export interface EncounterDef {
 export interface LoadoutEntry {
   charId: string;
   star: Star;
+  /** 装備。スロット数は★の数と同じ（equipmentSlots(star)）。超えた分は無視される */
   equipment: string[];
   /** 前衛の場合の配置 */
   pos?: Hex;

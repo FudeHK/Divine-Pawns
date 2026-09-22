@@ -177,6 +177,14 @@ export function buildStats(input: BuildStatsInput): Stats {
   return s;
 }
 
+/**
+ * 装備スロットの数。★の数と同じ（★1=1・★2=2・★3=3）。
+ * 固定値ではなく、常にこの関数から求める。
+ */
+export function equipmentSlots(star: Star): number {
+  return star;
+}
+
 /** ★によるスキル係数の倍率 */
 export function skillStarMul(star: Star, cfg: BattleConfig = DEFAULT_CONFIG): number {
   return cfg.starSkillMul[star];
