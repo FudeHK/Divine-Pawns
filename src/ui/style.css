@@ -35,9 +35,8 @@
   --wood: #7ed957;
   --lightning: #d29bff;
 
-  --bar-h: 72px;
-  /* 下部バーの高さ上限（src/ui/layout.ts の barMaxVh と同じ値にする） */
-  --bar-max-vh: 56;
+  /* 下部バーの高さ（src/ui/layout.ts の barHeight と同じ値にする） */
+  --bar-h-fixed: 292px;
   /* 盤面が潰れないための最小の高さ */
   --board-min: 160px;
 }
@@ -261,6 +260,7 @@ select {
   gap: var(--gap);
   align-items: center;
   min-height: var(--tap);
+  height: var(--tap);
   flex-wrap: nowrap;
 }
 
@@ -368,9 +368,9 @@ select {
 .bottom-bar {
   flex: 0 0 auto;
   /* B6: どのタブでも外枠の高さは変わらない */
-  height: calc(var(--bar-max-vh) * 1vh);
-  max-height: calc(var(--bar-max-vh) * 1vh);
-  min-height: calc(var(--bar-max-vh) * 1vh);
+  height: var(--bar-h-fixed);
+  max-height: var(--bar-h-fixed);
+  min-height: var(--bar-h-fixed);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -690,6 +690,9 @@ select {
   font-weight: 700;
   height: 22px;
   line-height: 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .char-pager {
@@ -712,11 +715,9 @@ select {
 }
 
 .char-page-indicator {
-  text-align: center;
   font-size: var(--font-sub);
   color: var(--muted);
-  height: 20px;
-  line-height: 20px;
+  font-weight: 400;
 }
 
 .char-idrow {

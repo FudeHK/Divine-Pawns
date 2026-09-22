@@ -55,11 +55,6 @@ function hasBoard(): boolean {
   return app().querySelector('.board-area svg.board') !== null;
 }
 
-/** カードの装備・スキルを開く */
-function expandCard(): void {
-  const b = card().querySelector('.card-toggle') as HTMLButtonElement;
-  if ((b.textContent ?? '').startsWith('▼')) b.click();
-}
 
 /** スタックされたシート（DOM順＝下から上） */
 function sheets(): HTMLElement[] {
@@ -214,7 +209,7 @@ describe('A2 キャラを1体ずつ表示する', () => {
     expect(app().querySelector('.char-page-indicator')!.textContent).toBe(`3 / ${CHARACTERS.length}`);
   });
 
-  it('カードに必要な要素がそろっている（閉じた状態は4行）', () => {
+  it('カードは3行で、必要な要素がそろっている', () => {
     openTab('team');
     const c = card();
     expect(c.querySelector('.char-name')?.textContent).toBeTruthy();
@@ -223,28 +218,40 @@ describe('A2 キャラを1体ずつ表示する', () => {
     expect(c.querySelector('.tag.star-tag')?.textContent).toBe('★1');
     expect(c.querySelector('.char-slot-state')).toBeTruthy();
     expect(c.querySelectorAll('.char-quick .quick-cell').length).toBe(4);
-    const labels = [...c.querySelectorAll('button')].map((b) => b.textContent);
+    const labels = [...c.querySelectorAll('button')].map((b) => b.textContent ?? '');
     expect(labels).toContain('前衛');
     expect(labels).toContain('サポ');
     expect(labels).toContain('詳細');
-    expect(labels).toContain('配置');
-    // 閉じている間はスキル・装備の行を出さない（縦を詰めるため）
-    expect(c.querySelectorAll('.char-skills').length).toBe(0);
-    // 行は 名前 / 状態 / 操作 / 操作 の4つ
-    expect(c.querySelectorAll('.char-head, .char-line2, .char-sub').length).toBe(4);
-    // 名前は1回だけ
+    expect(labels.some((l) => l.startsWith('装備 '))).toBe(true);
+    // 「配置」ボタンと開閉トグルは廃止した
+    expect(labels).not.toContain('配置');
+    expect(c.querySelector('.card-toggle')).toBeNull();
+    // 行は 名前 / 状態 / 操作 の3つ
+    expect(c.querySelectorAll('.char-head, .char-line2, .char-sub').length).toBe(3);
     const name = c.querySelector('.char-name')!.textContent!;
     expect((c.textContent ?? '').split(name).length - 1).toBe(1);
   });
 
-  it('［▼ 装備］を押すとスキルアイコンと装備スロットが出る', () => {
+  it('装備ボタンはポップアップ（シート）で開く', () => {
     openTab('team');
-    expect(card().querySelectorAll('.skill-icon').length).toBe(0);
-    expandCard();
-    expect(card().querySelectorAll('.skill-icon').length).toBe(3);
-    expect(card().querySelectorAll('.equip-chip').length).toBeGreaterThan(0);
-    (card().querySelector('.card-toggle') as HTMLButtonElement).click();
-    expect(card().querySelectorAll('.skill-icon').length).toBe(0);
+    expect(sheets()).toHaveLength(0);
+    cardButton('装備').click();
+    expect(sheets()).toHaveLength(1);
+    expect(topTitle()).toContain('の装備');
+    expect(topSheet()!.querySelectorAll('.equip-slot').length).toBeGreaterThan(0);
+    closeTop();
+    expect(sheets()).toHaveLength(0);
+  });
+
+  it('詳細ポップアップの上に装備ポップアップを重ねられる', () => {
+    openTab('team');
+    cardButton('詳細').click();
+    expect(sheets()).toHaveLength(1);
+    cardButton('装備').click();
+    expect(sheets()).toHaveLength(2);
+    expect(topTitle()).toContain('の装備');
+    closeTop();
+    expect(sheets()).toHaveLength(1);
   });
 
   it('編成状況はページを送っても出ている', () => {
@@ -356,8 +363,7 @@ describe('A1 ポップアップは重ねて開く', () => {
   it('キャラ詳細 → 装備詳細 も同じように重なる', () => {
     pageTo('GRE_A');
     // 装備を1つ着ける
-    expandCard();
-    (card().querySelector('.equip-chip') as HTMLButtonElement).click();
+    cardButton('装備').click();
     (
       [...app().querySelectorAll('.sheet-list-item')].find((n) =>
         (n.textContent ?? '').includes('力の腕輪'),
@@ -467,32 +473,53 @@ describe('盤面アイコン', () => {
     expect(tokens.length).toBe(2);
   });
 
-  it('前衛カードの「配置」から盤面のマスに置ける', () => {
+  it('盤面の空きマスをタップすると、表示中のキャラが1タップで移動する', () => {
     pageTo('GRE_A');
-    cardButton('配置').click();
-    expect(card().className).toContain('selected');
-    const cells = [...app().querySelectorAll('svg.board polygon')].filter(
+    const before = card().querySelector('.char-slot-state')!.textContent;
+    const empty = [...app().querySelectorAll('svg.board polygon')]
+      .filter((p) => p.getAttribute('style') === 'cursor:pointer')
+      .pop()!;
+    tap(empty); // 1アクション
+    expect(sheets()).toHaveLength(0);
+    expect(findToken('青銅の')).toBeTruthy();
+    expect(card().querySelector('.char-slot-state')!.textContent).not.toBe(before);
+  });
+
+  it('他の味方のマスをタップすると、1タップで入れ替わる', () => {
+    const posOf = (id: string): string => {
+      pageTo(id);
+      return card().querySelector('.char-slot-state')!.textContent ?? '';
+    };
+    const a0 = posOf('GRE_A');
+    const b0 = posOf('NOR_A');
+    expect(a0).not.toBe(b0);
+
+    pageTo('GRE_A');
+    tap(findToken('灼炎の')!); // NOR_A のマスをタップ = 1アクション
+    expect(posOf('GRE_A')).toBe(b0);
+    expect(posOf('NOR_A')).toBe(a0);
+  });
+
+  it('前衛でないキャラを表示している間は、盤面が配置モードにならない', () => {
+    pageTo('EGY_B'); // 未配置
+    const empty = [...app().querySelectorAll('svg.board polygon')].filter(
       (p) => p.getAttribute('style') === 'cursor:pointer',
     );
-    tap(cells[cells.length - 1]!);
-    expect(sheets()).toHaveLength(0);
-    expect(card().className).not.toContain('selected');
-    expect(findToken('青銅の')).toBeTruthy();
+    expect(empty).toHaveLength(0);
   });
 });
 
 describe('装備スロット（★の数と同じ）', () => {
   it('★1・★2・★3 でスロットが 1・2・3 になる', () => {
     pageTo('GRE_A');
-    expandCard();
     for (const [star, n] of [
       [1, 1],
       [2, 2],
       [3, 3],
     ] as const) {
       setStar(star);
-      expect(card().querySelectorAll('.equip-chip').length, `★${star}`).toBe(n);
-      (card().querySelector('.equip-chip') as HTMLButtonElement).click();
+      expect(cardButton('装備').textContent, `★${star}`).toBe(`装備 0/${n}`);
+      cardButton('装備').click();
       expect(app().querySelectorAll('.equip-slot').length, `★${star}`).toBe(n);
       closeTop();
     }
@@ -500,9 +527,8 @@ describe('装備スロット（★の数と同じ）', () => {
 
   it('★が上がっても既存の装備は残り、増えたスロットに追加できる', () => {
     pageTo('GRE_A');
-    expandCard();
     setStar(1);
-    (card().querySelector('.equip-chip') as HTMLButtonElement).click();
+    cardButton('装備').click();
     (
       [...app().querySelectorAll('.sheet-list-item')].find((n) =>
         (n.textContent ?? '').includes('力の腕輪'),
@@ -510,7 +536,7 @@ describe('装備スロット（★の数と同じ）', () => {
     ).click();
 
     setStar(2);
-    (card().querySelector('.equip-chip') as HTMLButtonElement).click();
+    cardButton('装備').click();
     expect([...app().querySelectorAll('.equip-slot')].map((b) => b.textContent)).toEqual([
       '1. 力の腕輪（仮）',
       '2. 装備なし',
@@ -522,7 +548,7 @@ describe('装備スロット（★の数と同じ）', () => {
       ) as HTMLButtonElement
     ).click();
 
-    (card().querySelector('.equip-chip') as HTMLButtonElement).click();
+    cardButton('装備').click();
     expect([...app().querySelectorAll('.equip-slot')].map((b) => b.textContent)).toEqual([
       '1. 力の腕輪（仮）',
       '2. 堅牢の胸当て（仮）',
@@ -687,18 +713,14 @@ describe('ラン進行とメイン画面の切り替え', () => {
     expect(run).toBeUndefined(); // 状態は module 内に閉じている
   });
 
-  it('B4: ラン中は★を直接変えられない（合成だけ）', () => {
+  it('B4: ラン中は★を直接変えられない（合成ボタンも出さない）', () => {
     startRun();
     openTab('team');
     expect(card().querySelector('.sandbox-star')).toBeNull();
     expect(card().querySelector('select')).toBeNull();
-    const merge = [...card().querySelectorAll('button')].find((b) => b.textContent === '合成')!;
-    expect(merge).toBeTruthy();
-    // 同じキャラが2体そろっていないので押せない
-    expect(merge.disabled).toBe(true);
-    const star = card().querySelector('.star-tag')!.textContent;
-    merge.click();
-    expect(card().querySelector('.star-tag')!.textContent).toBe(star);
+    const labels = [...card().querySelectorAll('button')].map((b) => b.textContent ?? '');
+    expect(labels).not.toContain('合成');
+    expect(card().querySelector('.star-tag')!.textContent).toBe('★1');
   });
 
   it('ラン中は編成が「所持キャラ1体」になる', () => {
@@ -825,5 +847,71 @@ describe('A3 スキルはランクアップで増える', () => {
     // アクティブ / パッシブ / サポート の3行のうち、中身があるのは2行
     expect(names).toHaveLength(3);
     expect(names.filter((n) => n !== 'なし')).toHaveLength(2);
+  });
+});
+
+describe('5. ★アップ時のスキル3択は即時に出る', () => {
+  function startRun(): void {
+    openTab('run');
+    findButton('▶ 新しいランを始める')!.click();
+  }
+
+  /** ショップまで進めて、所持キャラと同じキャラを買えるようにする */
+  function toShop(): void {
+    findButton('▶ この戦闘に挑む')!.click();
+    openTab('control');
+    findButton('⏭ スキップ')!.click();
+    findButton('結果へ')!.click();
+    findButton('次へ')!.click();
+    expect(screen()).toBe('shop');
+  }
+
+  it('同じキャラをショップで買うと、その場で3択ポップアップが出る', () => {
+    startRun();
+    // 所持キャラの名前を控える
+    openTab('team');
+    const ownedName = card().querySelector('.char-name')!.textContent!;
+    toShop();
+
+    const row = [...mainArea().querySelectorAll('.shop-row')].find(
+      (r) => r.querySelector('.shop-name')?.textContent === ownedName,
+    );
+    if (!row) return; // その並びに出なかった回はスキップ
+
+    const buy = row.querySelector('button') as HTMLButtonElement;
+    if (buy.disabled) return; // コインが足りない回はスキップ
+    buy.click();
+
+    // 何も押さずにポップアップが出ている
+    expect(topSheet()).toBeTruthy();
+    expect(topTitle()).toContain('スキル選択');
+    expect(app().querySelectorAll('.sheet .sheet-list-item').length).toBeGreaterThan(0);
+
+    // 選ぶと閉じる
+    (app().querySelectorAll('.sheet .sheet-list-item')[0] as HTMLButtonElement).click();
+    expect(app().querySelector('.sheet.skill-choice')).toBeNull();
+
+    // ★が上がっている
+    openTab('team');
+    expect(card().querySelector('.star-tag')!.textContent).toBe('★2');
+  });
+
+  it('選び終わるまでポップアップは開いたまま（閉じても出し直される）', () => {
+    startRun();
+    openTab('team');
+    const ownedName = card().querySelector('.char-name')!.textContent!;
+    toShop();
+    const row = [...mainArea().querySelectorAll('.shop-row')].find(
+      (r) => r.querySelector('.shop-name')?.textContent === ownedName,
+    );
+    if (!row) return;
+    const buy = row.querySelector('button') as HTMLButtonElement;
+    if (buy.disabled) return;
+    buy.click();
+    expect(topTitle()).toContain('スキル選択');
+
+    // ×で閉じても、未選択なら次の描画で出し直される
+    closeTop();
+    expect(app().querySelector('.sheet.skill-choice')).toBeTruthy();
   });
 });

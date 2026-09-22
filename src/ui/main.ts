@@ -43,11 +43,11 @@ import {
   chooseSkill,
   createRun,
   currentNode,
+  currentSkillChoice,
   learnedSkillIds,
-  mergeCandidates,
-  mergeChars,
   progressMap,
   rerollShop,
+  runEncounter,
   resolveEventBattle,
   runLoadout,
 } from '../game/run';
@@ -149,8 +149,6 @@ const state = {
   } | null,
   /** 「編成」タブで今表示しているメンバーの番号 */
   cardIndex: 0,
-  /** キャラカードでスキル・装備を開いているか（閉じている時はカードが1画面に収まる） */
-  cardExpanded: false,
   sheets: [] as Sheet[],
   resumeAfterSheet: false,
 
@@ -549,14 +547,16 @@ function renderBoard(): SVGSVGElement {
     const { cx, cy } = hexCenter(cell);
     const isAlly = cell.y >= 3;
     const occ = occupiedBy(cell);
-    const placing = !rep && state.selected !== null && isAlly;
+    const focus = !rep ? currentCardMember() : null;
+    const placing = !rep && focus !== null && focus.slot === 'frontline' && isAlly;
     const p = el('polygon', {
       points: hexPoints(cx, cy, R * 0.95),
       fill: isAlly ? (placing ? '#1d3149' : '#182231') : '#291a1d',
       stroke: placing ? '#ffcc52' : occ && !rep ? '#ffcc52' : '#3a3f52',
       'stroke-width': placing ? 2 : 1.5,
     });
-    if (!rep && isAlly) {
+    // 置ける状態（前衛のカードを表示中）の時だけ、マスをタップできる
+    if (placing) {
       p.setAttribute('style', 'cursor:pointer');
       p.addEventListener('click', () => onCellTap(cell));
     }
@@ -587,10 +587,7 @@ function renderBoard(): SVGSVGElement {
       drawToken(svg, cx, cy, getCharacter(m.charId).shortName, '#4aa3ff', {
         star: m.star,
         focused: focus ? m.key === focus.key : false,
-        onTap: () => {
-          if (state.selected) onCellTap(cell);
-          else openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } });
-        },
+        onTap: () => onCellTap(cell),
       });
     }
     const dup = enemyDupIndexes();
@@ -694,29 +691,54 @@ function renderBoard(): SVGSVGElement {
 // 操作
 // ---------------------------------------------------------------------------
 
+/**
+ * 盤面のマスをタップした時。
+ * いま編成タブのカードに出ているキャラ（前衛）を、そのマスへ置く。
+ *   - 空きマス   → そこへ移動（1タップ）
+ *   - 他の味方   → その味方と位置を入れ替える（1タップ）
+ */
 function onCellTap(cell: Hex): void {
-  if (!state.selected) {
-    const occ = occupiedBy(cell);
-    if (occ) openSheet({ kind: 'detail', target: { kind: 'member', key: occ } });
-    else {
-      state.message = '「編成」タブでキャラを選んでから、マスをタップ';
-      render();
-    }
+  const me = currentCardMember();
+  if (!me) return;
+
+  if (me.slot !== 'frontline') {
+    state.message = 'このキャラは前衛ではありません（「前衛」を押すと置けます）';
+    render();
     return;
   }
-  const key = state.selected;
-  const me = memberOf(key);
-  if (!me) return;
-  const prev = me.pos;
+
   const occ = occupiedBy(cell);
-  if (occ && occ !== key) updateMember(occ, (o) => (o.pos = prev));
-  updateMember(key, (o) => {
+  if (occ === me.key) {
+    state.message = 'すでにこのマスにいます';
+    render();
+    return;
+  }
+
+  const from = me.pos;
+  if (occ) {
+    // 入れ替え。自分がまだ盤上にいないなら、相手を空きマスへ移す
+    const dest = from ?? freeCellExcept(cell);
+    if (!dest) {
+      state.message = '空いているマスがありません';
+      render();
+      return;
+    }
+    updateMember(occ, (o) => (o.pos = { ...dest }));
+  }
+  updateMember(me.key, (o) => {
     o.slot = 'frontline';
     o.pos = { ...cell };
   });
-  state.message = `${getCharacter(me.charId).shortName} を (${cell.x},${cell.y}) に配置`;
-  state.selected = null;
+  state.message = `${getCharacter(me.charId).shortName} を (${cell.x},${cell.y}) に置いた`;
   render();
+}
+
+/** 指定マス以外の空きマス */
+function freeCellExcept(except: Hex): Hex | null {
+  const c = ALLY_CELLS.find(
+    (x) => !(x.x === except.x && x.y === except.y) && !occupiedBy(x),
+  );
+  return c ? { ...c } : null;
 }
 
 function setSlot(key: string, slot: Slot): void {
@@ -811,9 +833,10 @@ function startBattle(context: BattleContext = 'sandbox', encounterId?: string): 
     return;
   }
   const run = state.run;
+  const encId = encounterId ?? activeEncounterId();
   const setup = buildBattleSetup(
     currentLoadout(),
-    getEncounter(encounterId ?? activeEncounterId()),
+    run ? runEncounter(run, encId, runCfg) : getEncounter(encId),
     {
       seed: `${state.seed}::${run ? `${run.chapter}-${run.nodeIndex}-${run.bossRetries}` : 'sandbox'}`,
       config: DEFAULT_CONFIG,
@@ -910,6 +933,18 @@ function afterResult(): void {
 
 function autoSave(): void {
   if (state.run) saveRun(state.run);
+}
+
+/**
+ * ★が上がった直後のスキル3択を、待ち行列の先頭から1件ずつ出す。
+ * 選び終わるまで他の操作には進ませない。
+ */
+function pumpSkillChoice(): boolean {
+  const run = state.run;
+  if (!run || run.pendingSkills.length === 0) return false;
+  const top = state.sheets[state.sheets.length - 1];
+  if (top?.kind !== 'skillChoice') state.sheets.push({ kind: 'skillChoice' });
+  return true;
 }
 
 function startRun(): void {
@@ -1199,17 +1234,6 @@ export function currentCardMember(): Member | null {
   return list[i]!;
 }
 
-/** 同じキャラ・同じ★の相方（合成できる相手）の uid */
-function mergePartnerOf(key: string): string | null {
-  const run = state.run;
-  if (!run) return null;
-  for (const pair of mergeCandidates(run)) {
-    if (pair.a.uid === key) return pair.b.uid;
-    if (pair.b.uid === key) return pair.a.uid;
-  }
-  return null;
-}
-
 function pageBy(delta: number): void {
   const n = party().length;
   if (n === 0) return;
@@ -1227,20 +1251,23 @@ function slotLabel(m: Member): string {
 function renderTeamTab(body: HTMLElement): void {
   const list = party();
   const lim = slotLimits();
-  body.appendChild(
+  const summary = h('div', 'team-summary');
+  summary.appendChild(
     h(
-      'div',
-      'team-summary',
+      'span',
+      undefined,
       `前衛 ${countSlot('frontline')}/${lim.frontline}・サポート ${countSlot('support')}/${lim.support}`,
     ),
   );
+  summary.appendChild(
+    h('span', 'char-page-indicator', `${state.cardIndex + 1} / ${list.length}`),
+  );
+  body.appendChild(summary);
   body.appendChild(
     h(
       'div',
       'hint' + (validateLoadout() ? ' err' : ''),
-      state.message ||
-        validateLoadout() ||
-        (state.selected ? '盤面のマスをタップして配置' : 'カードを送ってキャラを選ぶ'),
+      state.message || validateLoadout() || '盤面のマスをタップすると、このキャラを置ける',
     ),
   );
 
@@ -1287,27 +1314,9 @@ function renderTeamTab(body: HTMLElement): void {
   line2.appendChild(quick);
   card.appendChild(line2);
 
-  // 3行目: 操作（合成／★・前衛/サポート）
+  // 3行目: 操作（★はラン外だけ／前衛・サポート・装備・詳細）
   const sub = h('div', 'char-sub');
-  if (state.run) {
-    // ラン中は合成（同じキャラ2体）でしか★は上がらない
-    const mate = mergePartnerOf(m.key);
-    const mergeBtn = btn('合成', false, () => {
-      const run = state.run;
-      if (!run || !mate) return;
-      if (mergeChars(run, m.key, mate)) {
-        state.message = '';
-        autoSave();
-        if (run.pendingSkill) openSheet({ kind: 'skillChoice' });
-        else render();
-      }
-    });
-    mergeBtn.disabled = mate === null;
-    mergeBtn.title = mate
-      ? '同じキャラ2体を合成して★を上げる'
-      : '同じキャラ・同じ★が2体そろうと合成できる';
-    sub.appendChild(mergeBtn);
-  } else {
+  if (!state.run) {
     // ラン外のサンドボックス（動作確認用）でだけ★を直接変えられる
     const starSel = document.createElement('select');
     starSel.className = 'sandbox-star';
@@ -1326,69 +1335,25 @@ function renderTeamTab(body: HTMLElement): void {
   }
   sub.appendChild(btn('前衛', m.slot === 'frontline', () => setSlot(m.key, 'frontline')));
   sub.appendChild(btn('サポ', m.slot === 'support', () => setSlot(m.key, 'support')));
-  card.appendChild(sub);
-
-  // 4行目: 配置・詳細・展開
-  const sub2 = h('div', 'char-sub');
-  sub2.appendChild(
-    btn(state.selected === m.key ? '中止' : '配置', state.selected === m.key, () => {
-      if (m.slot !== 'frontline') {
-        state.message = '前衛にしてから配置してください';
-        render();
-        return;
-      }
-      state.selected = state.selected === m.key ? null : m.key;
-      state.message = state.selected ? '盤面のマスをタップして配置' : '';
-      render();
-    }),
-  );
-  sub2.appendChild(
-    btn('詳細', false, () => openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } })),
-  );
-  sub2.appendChild(
-    btn(
-      state.cardExpanded ? '▲ 閉じる' : '▼ 装備',
-      state.cardExpanded,
-      () => {
-        state.cardExpanded = !state.cardExpanded;
-        render();
-      },
-      'card-toggle',
+  sub.appendChild(
+    btn(`装備 ${m.equipment.filter((x) => x !== '').length}/${m.equipment.length}`, false, () =>
+      openSheet({ kind: 'equip', key: m.key, slot: firstOpenSlot(m) }),
     ),
   );
-  card.appendChild(sub2);
-
-  // 展開したときだけ出す（閉じている間はカードが1画面に収まる）
-  if (state.cardExpanded) {
-    const extra = h('div', 'char-skills');
-    for (const [mark, label] of [
-      ['A', 'アクティブ'],
-      ['P', 'パッシブ'],
-      ['S', 'サポート効果'],
-    ] as [string, string][]) {
-      const b = btn(mark, false, () =>
-        openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } }),
-      );
-      b.classList.add('skill-icon');
-      b.title = label;
-      extra.appendChild(b);
-    }
-    m.equipment.forEach((id, i) => {
-      const b = btn(id ? getEquipment(id).name.slice(0, 2) : '＋', id !== '', () =>
-        openSheet({ kind: 'equip', key: m.key, slot: i }),
-      );
-      b.classList.add('equip-chip');
-      b.title = `装備スロット ${i + 1}`;
-      extra.appendChild(b);
-    });
-    card.appendChild(extra);
-  }
+  sub.appendChild(
+    btn('詳細', false, () => openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } })),
+  );
+  card.appendChild(sub);
 
   pager.appendChild(card);
   pager.appendChild(btn('▶', false, () => pageBy(1), 'pager-next'));
   body.appendChild(pager);
+}
 
-  body.appendChild(h('div', 'char-page-indicator', `${state.cardIndex + 1} / ${list.length}`));
+/** 空いている装備スロット（なければ0番） */
+function firstOpenSlot(m: Member): number {
+  const i = m.equipment.findIndex((x) => x === '');
+  return i < 0 ? 0 : i;
 }
 
 // ---------------------------------------------------------------------------
@@ -2123,7 +2088,7 @@ function renderBlessingsSheet(root: HTMLElement, depth: number, isTop: boolean):
 /** 合成でランクアップした時の、スキル3択 */
 function renderSkillChoiceSheet(root: HTMLElement, depth: number, isTop: boolean): void {
   const run = state.run;
-  const pending = run?.pendingSkill;
+  const pending = run ? currentSkillChoice(run) : null;
   if (!run || !pending) {
     state.sheets.pop();
     return;
@@ -2131,7 +2096,16 @@ function renderSkillChoiceSheet(root: HTMLElement, depth: number, isTop: boolean
   const c = getCharacter(pending.charId);
   const { wrap, body } = sheetShell(`${c.name} のスキル選択`, { depth, isTop });
   body.classList.add('skill-choice');
-  body.appendChild(h('div', 'hint', '1つ選んで覚える（選ばなかったものは今回は失う）'));
+  const queued = run.pendingSkills.length;
+  body.appendChild(
+    h(
+      'div',
+      'hint',
+      queued > 1
+        ? `1つ選んで覚える（あと ${queued} 件）`
+        : '1つ選んで覚える（選ばなかったものは今回は失う）',
+    ),
+  );
 
   const KIND_LABEL: Record<string, string> = {
     active: 'アクティブ',
@@ -2150,7 +2124,13 @@ function renderSkillChoiceSheet(root: HTMLElement, depth: number, isTop: boolean
     item.addEventListener('click', () => {
       chooseSkill(run, id);
       autoSave();
-      closeTopSheet();
+      state.sheets.pop();
+      // まだ待っている3択があれば、続けて次を出す
+      if (!pumpSkillChoice() && state.sheets.length === 0) {
+        if (state.replay && state.resumeAfterSheet) state.playing = true;
+        state.resumeAfterSheet = false;
+      }
+      render();
     });
     body.appendChild(item);
   }
@@ -2186,6 +2166,9 @@ function renderSheets(root: HTMLElement): void {
 // ---------------------------------------------------------------------------
 
 function render(): void {
+  // ★が上がったら、その場でスキル3択を出す（選ぶまで先に進ませない）
+  pumpSkillChoice();
+
   const root = document.getElementById('app')!;
   root.textContent = '';
   root.dataset.screen = state.screen;

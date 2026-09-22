@@ -16,10 +16,11 @@ import {
   type Penalty,
   type Reward,
 } from '../data/events';
+import { getEncounter } from '../data/encounters';
 import { Rng } from '../engine/rng';
 import { learnedSkills } from '../engine/build';
 import { equipmentSlots } from '../engine/stats';
-import type { Loadout, Star } from '../engine/types';
+import type { EncounterDef, Loadout, Star } from '../engine/types';
 import { DEFAULT_RUN_CONFIG, type RunConfig } from './config';
 import type { EventOutcome, OwnedChar, RunNode, RunState, ShopItem, ShopOffer } from './types';
 
@@ -129,7 +130,7 @@ export function createRun(seed: string, cfg: RunConfig = DEFAULT_RUN_CONFIG): Ru
     shop: null,
     eventId: null,
     lastEvent: null,
-    pendingSkill: null,
+    pendingSkills: [],
   };
   prepareNode(run, cfg);
   return run;
@@ -252,10 +253,11 @@ export function rollShop(
   const perKind = 2 + (boss ? cfg.bossExtraPerKind : 0);
   const items: ShopItem[] = [];
 
-  for (let i = 0; i < perKind; i++) {
+  const charPool = availableCharacters(run);
+  for (let i = 0; i < perKind && charPool.length > 0; i++) {
     items.push({
       kind: 'character',
-      charId: rng.pick(CHARACTERS).id,
+      charId: rng.pick(charPool).id,
       price: priceOf(cfg.price.character, boss, cfg),
     });
   }
@@ -316,9 +318,11 @@ export function buyShopItem(
 
   const it = slot.item;
   switch (it.kind) {
-    case 'character':
-      run.roster.push(makeOwnedChar(it.charId));
+    case 'character': {
+      const res = grantCharacter(run, it.charId, `shop-${index}`);
+      if (res === 'maxed') return false;
       break;
+    }
     case 'blessing':
       if (run.blessings.includes(it.blessingId)) return false;
       run.blessings.push(it.blessingId);
@@ -365,65 +369,60 @@ export function grantPromotion(run: RunState, cfg: RunConfig = DEFAULT_RUN_CONFI
 // 合成（ランクアップ）とスキルの3択
 // ---------------------------------------------------------------------------
 
-/** 合成できる組（同じキャラ・同じ★が2体） */
-export function mergeCandidates(run: RunState): { a: OwnedChar; b: OwnedChar }[] {
-  const out: { a: OwnedChar; b: OwnedChar }[] = [];
-  const used = new Set<string>();
-  for (let i = 0; i < run.roster.length; i++) {
-    const a = run.roster[i]!;
-    if (used.has(a.uid) || a.star >= 3) continue;
-    for (let j = i + 1; j < run.roster.length; j++) {
-      const b = run.roster[j]!;
-      if (used.has(b.uid)) continue;
-      if (b.charId !== a.charId || b.star !== a.star) continue;
-      used.add(a.uid);
-      used.add(b.uid);
-      out.push({ a, b });
-      break;
-    }
-  }
-  return out;
+/** 所持しているか（同じキャラは1体しか持たない） */
+export function ownedChar(run: RunState, charId: string): OwnedChar | undefined {
+  return run.roster.find((o) => o.charId === charId);
 }
 
-/** ★を1つ上げ、まだ覚えていないスキルから3択を用意する */
+/** ★を1つ上げ、まだ覚えていないスキルから3択を待ち行列に積む */
 function rankUp(run: RunState, o: OwnedChar, rng: Rng): void {
   o.star = Math.min(3, o.star + 1) as Star;
   const pool = rng.shuffle(unlearnedSkills(o.charId, o.skills).map((s) => s.id));
   const options = pool.slice(0, 3);
-  run.pendingSkill = options.length > 0 ? { uid: o.uid, charId: o.charId, options } : null;
+  if (options.length > 0) run.pendingSkills.push({ uid: o.uid, charId: o.charId, options });
 }
 
+export type GrantResult = 'added' | 'rankedUp' | 'maxed';
+
 /**
- * 同じキャラ2体を合成して★を1つ上げる。
- * 成功すると「スキルの3択（run.pendingSkill）」が立つ。
+ * キャラを手に入れる。
+ * すでに持っているキャラなら、2体目にはせず★を1つ上げる（★3が上限）。
+ * ★が上がったら、その場でスキルの3択が待ち行列に積まれる。
  */
-export function mergeChars(run: RunState, uidA: string, uidB: string): boolean {
-  const a = run.roster.find((o) => o.uid === uidA);
-  const b = run.roster.find((o) => o.uid === uidB);
-  if (!a || !b || a === b) return false;
-  if (a.charId !== b.charId || a.star !== b.star || a.star >= 3) return false;
+export function grantCharacter(run: RunState, charId: string, tag = 'grant'): GrantResult {
+  const owned = ownedChar(run, charId);
+  if (!owned) {
+    run.roster.push(makeOwnedChar(charId));
+    return 'added';
+  }
+  if (owned.star >= 3) return 'maxed';
+  const rng = new Rng(`${run.seed}::rankup::${charId}::${owned.star}::${tag}`);
+  rankUp(run, owned, rng);
+  return 'rankedUp';
+}
 
-  // 装備は引き継ぎ、余ったぶんは在庫に戻す
-  for (const id of b.equipment) if (id) run.inventory.push(id);
-  run.roster = run.roster.filter((o) => o.uid !== b.uid);
+/** ショップや報酬に出してよいキャラ（★3で所持済みのものは出さない） */
+export function availableCharacters(run: RunState): readonly { id: string }[] {
+  return CHARACTERS.filter((c) => {
+    const o = ownedChar(run, c.id);
+    return !o || o.star < 3;
+  });
+}
 
-  const rng = new Rng(`${run.seed}::merge::${a.uid}::${a.star}`);
-  rankUp(run, a, rng);
-  return true;
+/** 待ち行列の先頭のスキル3択 */
+export function currentSkillChoice(run: RunState): RunState['pendingSkills'][number] | null {
+  return run.pendingSkills[0] ?? null;
 }
 
 /** 3択からスキルを1つ選ぶ。選ばなかった2つは捨てる（次のランクアップで再抽選） */
 export function chooseSkill(run: RunState, skillId: string): boolean {
-  const pending = run.pendingSkill;
+  const pending = run.pendingSkills[0];
   if (!pending) return false;
   if (!pending.options.includes(skillId)) return false;
   const o = run.roster.find((x) => x.uid === pending.uid);
-  if (!o) {
-    run.pendingSkill = null;
-    return false;
-  }
+  run.pendingSkills.shift();
+  if (!o) return false;
   if (!o.skills.includes(skillId)) o.skills.push(skillId);
-  run.pendingSkill = null;
   return true;
 }
 
@@ -482,9 +481,15 @@ function applyReward(
       return [`加護を入手: ${b.name}`];
     }
     case 'character': {
-      const c = rng.pick(CHARACTERS);
-      run.roster.push(makeOwnedChar(c.id));
-      return [`仲間が増えた: ${c.name}`];
+      const pool = availableCharacters(run);
+      if (pool.length === 0) {
+        run.coins += 5;
+        return ['迎えられる仲間がいなかった（コイン +5）'];
+      }
+      const picked = rng.pick(pool);
+      const name = CHARACTERS.find((c) => c.id === picked.id)!.name;
+      const res = grantCharacter(run, picked.id, 'event');
+      return [res === 'added' ? `仲間が増えた: ${name}` : `${name} が ★アップ`];
     }
     case 'star': {
       const pool = run.roster.filter((o) => o.star < 3);
@@ -654,6 +659,21 @@ export function runLoadout(run: RunState): Loadout {
       equipment: o.equipment.slice(0, equipmentSlots(o.star)).filter((x) => x !== ''),
     }));
   return { frontline, support, blessings: [...run.blessings] };
+}
+
+/** その章の強さ倍率をかけた遭遇（ラン中の戦闘に使う） */
+export function runEncounter(
+  run: RunState,
+  encounterId: string,
+  cfg: RunConfig = DEFAULT_RUN_CONFIG,
+): EncounterDef {
+  const base = getEncounter(encounterId);
+  const mul = cfg.chapterScale[run.chapter] ?? 1;
+  if (mul === 1) return base;
+  return {
+    ...base,
+    units: base.units.map((u) => ({ ...u, scale: (u.scale ?? 1) * mul })),
+  };
 }
 
 /** 進行マップの表示用 */

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T13:14:29.775Z",
+  "generatedAt": "2026-09-22T13:57:11.723Z",
   "determinism": {
     "total": 1000,
     "matched": 1000,
@@ -221,6 +221,30 @@
         "avgAllyDps": 232.4
       }
     ],
+    "buildScenarios": [
+      {
+        "style": "elite",
+        "label": "少数精鋭（前衛2・サポート1に集中投資）",
+        "runs": 200,
+        "clears": 89,
+        "clearRate": 44.5,
+        "avgReachedChapter": 1.95,
+        "avgBattleWinRate": 59,
+        "avgRoster": 1.7,
+        "avgMaxStar": 1.95
+      },
+      {
+        "style": "wide",
+        "label": "多キャラ（枠いっぱいに広く編成）",
+        "runs": 200,
+        "clears": 182,
+        "clearRate": 91,
+        "avgReachedChapter": 2.82,
+        "avgBattleWinRate": 92.9,
+        "avgRoster": 6.44,
+        "avgMaxStar": 2.83
+      }
+    ],
     "dpsByElement": [
       {
         "element": "fire",
@@ -353,8 +377,8 @@
   },
   "perf": {
     "battles": 10000,
-    "seconds": 10.57,
-    "battlesPerSecond": 946,
+    "seconds": 12.21,
+    "battlesPerSecond": 818.9,
     "avgTicksPerBattle": 90.6,
     "avgDuration": 9.06,
     "logging": true

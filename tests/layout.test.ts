@@ -41,9 +41,9 @@ function pxOf(selector: string, prop: string): number | null {
 }
 
 describe('レイアウト定数と CSS が一致している', () => {
-  it('下部バーの上限（vh）が同じ', () => {
-    expect(cssVar('--bar-max-vh')).toBe(String(LAYOUT.barMaxVh));
-    expect(ruleBody('.bottom-bar')).toContain('calc(var(--bar-max-vh) * 1vh)');
+  it('下部バーの高さ（px）が同じ', () => {
+    expect(cssVar('--bar-h-fixed')).toBe(`${LAYOUT.barHeight}px`);
+    expect(ruleBody('.bottom-bar')).toContain('var(--bar-h-fixed)');
   });
 
   it('タップ領域・隙間・盤面の最小高さが同じ', () => {
@@ -59,7 +59,6 @@ describe('レイアウト定数と CSS が一致している', () => {
     expect(ruleBody('.char-sub')).toContain('min-height: var(--tap)');
     expect(pxOf('.char', 'padding')).toBe(LAYOUT.cardPadding);
     expect(pxOf('.team-summary', 'height')).toBe(LAYOUT.summaryHeight);
-    expect(pxOf('.char-page-indicator', 'height')).toBe(LAYOUT.indicatorHeight);
     expect(pxOf('.hint', 'min-height')).toBe(LAYOUT.hintHeight);
   });
 });
@@ -71,18 +70,17 @@ describe('キャラカードが縦スクロールなしに収まる', () => {
     expect(content, `content=${content} body=${body}`).toBeLessThanOrEqual(body);
   });
 
-  it('カード1枚の高さは4行ぶんに収まる', () => {
-    // 名前 / 状態＋ステータス / 操作 / 操作 の4行
+  it('カード1枚の高さは3行ぶんに収まる', () => {
+    // 名前 / 状態＋ステータス / 操作 の3行
     expect(teamCardHeight()).toBe(
       LAYOUT.rowNameHeight +
         LAYOUT.rowStateHeight +
         LAYOUT.rowActionHeight +
-        LAYOUT.rowAction2Height +
-        LAYOUT.cardRowGap * 3 +
+        LAYOUT.cardRowGap * 2 +
         LAYOUT.cardPadding * 2 +
         LAYOUT.cardBorder,
     );
-    expect(teamCardHeight()).toBeLessThanOrEqual(200);
+    expect(teamCardHeight()).toBeLessThanOrEqual(130);
   });
 
   it('いちばん低い画面でも余白が残る（詰めすぎていない）', () => {
@@ -95,6 +93,8 @@ describe('盤面が潰れない', () => {
   it.each([...TEST_VIEWPORT_HEIGHTS])('画面高さ %ipx で盤面に十分な高さが残る', (vh) => {
     const board = boardHeight(vh);
     expect(board, `board=${board}`).toBeGreaterThanOrEqual(LAYOUT.boardMinHeight);
+    // フェーズ2.2（バー56vh）より盤面が広がっていること
+    expect(board, `board=${board}`).toBeGreaterThan(vh - Math.floor((vh * 56) / 100) - 60);
   });
 
   it('下部バーと盤面を足しても画面からはみ出さない', () => {
@@ -119,7 +119,7 @@ describe('B6 下部バーの高さは固定', () => {
         .filter((kv) => kv.length >= 2)
         .map((kv) => [kv[0]!.trim(), kv.slice(1).join(':').trim()]),
     );
-    const want = 'calc(var(--bar-max-vh) * 1vh)';
+    const want = 'var(--bar-h-fixed)';
     for (const prop of ['height', 'min-height', 'max-height']) {
       expect(decls.get(prop), prop).toBe(want);
     }

@@ -38,7 +38,7 @@ export interface OwnedChar {
   pos?: Hex;
 }
 
-/** 合成でランクアップした直後の、3択のスキル選択 */
+/** ランクアップした直後の、3択のスキル選択 */
 export interface PendingSkillChoice {
   uid: string;
   charId: string;
@@ -123,6 +123,9 @@ export interface RunState {
   /** 直近のイベント結果 */
   lastEvent: EventOutcome | null;
 
-  /** 合成直後のスキル3択（未選択の間だけ入る） */
-  pendingSkill: PendingSkillChoice | null;
+/**
+   * ランクアップ直後のスキル3択の待ち行列。
+   * 連続でランクアップしても、先頭から1件ずつ選ばせる。
+   */
+  pendingSkills: PendingSkillChoice[];
 }

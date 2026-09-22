@@ -5,6 +5,7 @@
 
 import { ELEMENTS, type Element } from '../src/engine/types';
 import { Rng } from '../src/engine/rng';
+import { runBuildScenarios, type BuildScenarioReport } from './autorun';
 import {
   ENCOUNTERS,
   fight,
@@ -31,6 +32,8 @@ export interface BalanceReport {
     avgAllyDps: number;
   }[];
   dpsByElement: { element: Element; avgDps: number; share: number }[];
+  /** ビルド別のラン通しクリア率（少数精鋭／多キャラ） */
+  buildScenarios: BuildScenarioReport[];
 }
 
 export function runBalance(loadoutCount = 1000): BalanceReport {
@@ -104,6 +107,7 @@ export function runBalance(loadoutCount = 1000): BalanceReport {
         avgAllyDps: round(mean(s.dps), 1),
       };
     }),
+    buildScenarios: runBuildScenarios(200),
     dpsByElement: ELEMENTS.map((el) => {
       const sum = elementDps[el].reduce((a, b) => a + b, 0);
       return {
@@ -129,6 +133,13 @@ function main(): void {
   }
   for (const e of rep.dpsByElement) {
     console.log(`  ${e.element.padEnd(9)} 平均DPS ${e.avgDps}  シェア ${e.share}%`);
+  }
+  for (const b of rep.buildScenarios) {
+    console.log(
+      `  ${b.label}: クリア率 ${b.clearRate}%（${b.clears}/${b.runs}）` +
+        `  平均到達 ${b.avgReachedChapter}章  戦闘勝率 ${b.avgBattleWinRate}%` +
+        `  平均人数 ${b.avgRoster}  最大★ ${b.avgMaxStar}`,
+    );
   }
   writeJson('sim-balance.json', rep);
 }

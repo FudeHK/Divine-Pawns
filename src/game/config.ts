@@ -51,6 +51,13 @@ export interface RunConfig {
 
   /** イベントでの枠拡張の出現率 */
   eventSlotRewardChance: number;
+
+  /**
+   * 章ごとの敵の強さ倍率（ラン中の戦闘だけに掛かる）。
+   * 遭遇データ（EncounterDef.scale）は配置検証の基準なので触らず、
+   * ラン全体の難易度カーブはここで作る。
+   */
+  chapterScale: Record<number, number>;
 }
 
 export const DEFAULT_RUN_CONFIG: RunConfig = {
@@ -85,6 +92,8 @@ export const DEFAULT_RUN_CONFIG: RunConfig = {
   maxPromotions: 3,
 
   eventSlotRewardChance: 0.25,
+
+  chapterScale: { 1: 0.5, 2: 0.72, 3: 0.92 },
 };
 
 export function cloneRunConfig(base: RunConfig = DEFAULT_RUN_CONFIG): RunConfig {

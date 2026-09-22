@@ -17,8 +17,12 @@ export const LAYOUT = {
   appGap: 6,
   /** 画面上部の見出し行 */
   headerHeight: 30,
-  /** 下部バーの高さ上限（vh） */
-  barMaxVh: 56,
+  /**
+   * 下部バーの高さ（px・固定）。
+   * 「編成」タブ（いちばん縦を要する）の実コンテンツ高さ＋余白から決めている。
+   * どのタブでもこの高さで、余る分は中身の余白、足りない分は内部スクロールで吸収する。
+   */
+  barHeight: 292,
   /** 下部バーの内側の余白（上下それぞれ） */
   barPadding: 8,
   /** 盤面が潰れないための最小の高さ */
@@ -35,47 +39,34 @@ export const LAYOUT = {
   rowNameHeight: 30,
   /** 2行目: 状態表示＋簡易ステータス */
   rowStateHeight: 26,
-  /** 3行目・4行目: 操作ボタン（タップ領域） */
+  /** 3行目: 操作ボタン（タップ領域） */
   rowActionHeight: 44,
-  rowAction2Height: 44,
 
-  /** 編成状況の1行 */
+  /** 編成状況＋「3 / 8」の1行 */
   summaryHeight: 22,
   /** ヒントの1行 */
   hintHeight: 20,
-  /** 「3 / 8」の表示 */
-  indicatorHeight: 20,
 } as const;
 
-/** キャラカード1枚の高さ（折りたたんだ標準の状態） */
+/** キャラカード1枚の高さ（名前 / 状態＋ステータス / 操作 の3行） */
 export function teamCardHeight(): number {
   const rows =
-    LAYOUT.rowNameHeight +
-    LAYOUT.rowStateHeight +
-    LAYOUT.rowActionHeight +
-    LAYOUT.rowAction2Height +
-    LAYOUT.cardRowGap * 3;
+    LAYOUT.rowNameHeight + LAYOUT.rowStateHeight + LAYOUT.rowActionHeight + LAYOUT.cardRowGap * 2;
   return rows + LAYOUT.cardPadding * 2 + LAYOUT.cardBorder;
 }
 
-/** 「編成」タブの中身の高さ（編成状況＋ヒント＋カード＋ページ表示） */
+/** 「編成」タブの中身の高さ（編成状況＋ヒント＋カード） */
 export function teamTabContentHeight(): number {
-  return (
-    LAYOUT.summaryHeight +
-    LAYOUT.hintHeight +
-    teamCardHeight() +
-    LAYOUT.indicatorHeight +
-    LAYOUT.cardRowGap * 3
-  );
+  return LAYOUT.summaryHeight + LAYOUT.hintHeight + teamCardHeight() + LAYOUT.cardRowGap * 2;
 }
 
-/** 下部バー全体の高さの上限 */
-export function barHeight(viewportHeight: number): number {
-  return Math.floor((viewportHeight * LAYOUT.barMaxVh) / 100);
+/** 下部バー全体の高さ（画面の高さによらず固定） */
+export function barHeight(_viewportHeight?: number): number {
+  return LAYOUT.barHeight;
 }
 
 /** 下部バーのうち、タブの中身に使える高さ */
-export function tabBodyHeight(viewportHeight: number): number {
+export function tabBodyHeight(viewportHeight?: number): number {
   return (
     barHeight(viewportHeight) -
     LAYOUT.barPadding * 2 -
