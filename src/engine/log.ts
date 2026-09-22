@@ -20,6 +20,7 @@ export type BattleEventType =
   | 'taunt'
   | 'mana'
   | 'death'
+  | 'teamEffect'
   | 'timeoutTick'
   | 'battleEnd';
 

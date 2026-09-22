@@ -56,7 +56,7 @@ import {
 
 const EPS = 1e-9;
 
-export type BattleOutcome = 'win' | 'lose' | 'timeout';
+export type BattleOutcome = 'win' | 'lose' | 'timeout' | 'draw';
 
 export interface BattleUnitSpec {
   id: string;
@@ -73,16 +73,43 @@ export interface BattleUnitSpec {
   stats: Stats;
   resist: number;
   isBoss?: boolean;
-  /** 加護など、盤面外で効果だけを持つ器 */
-  isCarrier?: boolean;
   targeting?: 'nearest' | 'backline';
+  /** 最初の攻撃までの待ち時間（秒）。省略時は設定値 initialAttackDelay */
+  initialAttackDelay?: number;
   /** この個体に付く効果定義（パッシブ・サポート・装備・加護・アクティブ） */
   effects: { def: EffectDef; origin: string }[];
+}
+
+/** 効果の出どころ */
+export interface EffectSource {
+  kind: 'blessing' | 'character' | 'equipment' | 'enemy';
+  id: string;
+}
+
+/**
+ * チーム単位の効果（加護など）。
+ * ユニットとしては生成しないので、編成人数・シナジーの数え上げ・
+ * ターゲット選び・ログの集計には一切混ざらない。
+ */
+export interface TeamEffect {
+  side: Side;
+  def: EffectDef;
+  source: EffectSource;
+}
+
+/** チーム効果の実行時状態 */
+export interface RuntimeTeamEffect extends TeamEffect {
+  uses: number;
+  timer: number;
+  fired: boolean;
+  active: boolean;
 }
 
 export interface BattleSetup {
   seed: string;
   units: BattleUnitSpec[];
+  /** チーム単位の効果（加護など）。ユニットにはしない */
+  teamEffects?: TeamEffect[];
   config?: BattleConfig;
   /** ログを記録するか（性能計測時に false にできる） */
   logging?: boolean;
@@ -185,6 +212,9 @@ export class Battle {
   /** 秒単位のサドンデス段階 */
   private suddenDeathStep = 0;
 
+  /** チーム単位の効果（加護など）。ユニットではない */
+  readonly teamEffects: RuntimeTeamEffect[] = [];
+
   constructor(setup: BattleSetup) {
     this.cfg = setup.config ?? DEFAULT_CONFIG;
     this.rng = new Rng(`${setup.seed}::battle`);
@@ -205,8 +235,8 @@ export class Battle {
         base: spec.stats,
         resist: spec.resist,
         isBoss: spec.isBoss ?? false,
-        isCarrier: spec.isCarrier ?? false,
         targeting: spec.targeting ?? 'nearest',
+        initialAttackDelay: spec.initialAttackDelay ?? this.cfg.initialAttackDelay,
       });
       u.effects = spec.effects.map<RuntimeEffect>((e) => ({
         def: e.def,
@@ -220,6 +250,22 @@ export class Battle {
     }
     // ユニットIDで安定ソート（決定論）
     this.units.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+    for (const te of setup.teamEffects ?? []) {
+      this.teamEffects.push({
+        side: te.side,
+        def: te.def,
+        source: te.source,
+        uses: 0,
+        timer: 0,
+        fired: false,
+        active: false,
+      });
+    }
+    // 出どころで安定ソート（決定論）
+    const key = (t: TeamEffect): string =>
+      t.side + ':' + t.source.kind + ':' + t.source.id + ':' + t.def.id;
+    this.teamEffects.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
   }
 
   // -------------------------------------------------------------------------
@@ -242,7 +288,7 @@ export class Battle {
 
   /** 編成上の味方全員（サポート枠を含む・生死を問わない） */
   private roster(side: Side): Unit[] {
-    return this.units.filter((u) => u.side === side && !u.isCarrier);
+    return this.units.filter((u) => u.side === side);
   }
 
   /** ユニットIDから引く（デバフの帰属に使う） */
@@ -310,6 +356,205 @@ export class Battle {
         }
         re.active = met;
       }
+    }
+
+    this.recomputeTeamAuras();
+  }
+
+  /** チーム効果のうち「常時」のものを評価する */
+  private recomputeTeamAuras(): void {
+    for (const te of this.teamEffects) {
+      if (te.def.trigger.kind !== 'always') continue;
+      const met = this.teamConditionsMet(te.side, te.def.conditions);
+      if (met) {
+        for (const eff of te.def.effects) {
+          if (isContinuous(eff)) this.applyTeamContinuous(te, eff);
+        }
+        if (!te.active) {
+          const inst = te.def.effects.filter((e) => !isContinuous(e));
+          if (inst.length > 0 && this.canUseTeam(te)) {
+            te.uses++;
+            this.emitTeamEffect(te);
+            for (const eff of inst) this.applyTeamInstant(te, eff);
+          }
+        }
+      }
+      te.active = met;
+    }
+  }
+
+  private canUseTeam(te: RuntimeTeamEffect): boolean {
+    return te.def.maxUses === undefined || te.uses < te.def.maxUses;
+  }
+
+  private emitTeamEffect(te: RuntimeTeamEffect): void {
+    this.emit({
+      type: 'teamEffect',
+      side: te.side,
+      note: te.source.kind + ':' + te.source.id + ':' + te.def.id,
+    });
+  }
+
+  /** everyN / atTime / battleStart のチーム効果を発動する */
+  private tryFireTeam(te: RuntimeTeamEffect): void {
+    if (!this.canUseTeam(te)) return;
+    if (!this.teamConditionsMet(te.side, te.def.conditions)) return;
+    te.uses++;
+    this.emitTeamEffect(te);
+    for (const eff of te.def.effects) {
+      if (isContinuous(eff)) this.applyTeamContinuous(te, eff);
+      else this.applyTeamInstant(te, eff);
+    }
+  }
+
+  private fireTeamTrigger(kind: 'battleStart'): void {
+    for (const te of this.teamEffects) {
+      if (te.def.trigger.kind !== kind) continue;
+      this.tryFireTeam(te);
+    }
+  }
+
+  /**
+   * チーム効果の条件。チームには盤面上の位置がないので、
+   * 位置に依存する条件（最前列・最後列・隣接）は満たさないものとして扱う。
+   */
+  private teamConditionsMet(side: Side, conds: readonly Condition[] | undefined): boolean {
+    if (!conds || conds.length === 0) return true;
+    for (const c of conds) {
+      switch (c.kind) {
+        case 'countAllies': {
+          const includeSupport = c.includeSupport ?? true;
+          const list = this.roster(side).filter((o) => o.alive && (includeSupport || o.onField));
+          let n = 0;
+          for (const o of list) {
+            const v = c.by === 'element' ? o.element : c.by === 'role' ? o.role : o.myth;
+            if (v === c.value) n++;
+          }
+          if (n < c.min) return false;
+          break;
+        }
+        case 'allDistinctElements': {
+          const list = this.roster(side);
+          if (new Set(list.map((o) => o.element)).size !== list.length) return false;
+          break;
+        }
+        case 'allyHpBelow': {
+          const list = this.fielded(side);
+          if (!list.some((o) => o.hp / Math.max(1, o.base.maxHp) < c.pct / 100)) return false;
+          break;
+        }
+        default:
+          // 位置に依存する条件はチームには適用できない
+          return false;
+      }
+    }
+    return true;
+  }
+
+  /** チーム効果の対象（位置に依存しないものだけ） */
+  private teamTargets(side: Side, spec: TargetSpec): Unit[] {
+    const foe = this.opposite(side);
+    switch (spec) {
+      case 'self':
+      case 'allAllies':
+      case 'frontlineAllies':
+        return this.fielded(side);
+      case 'allEnemies':
+      case 'nearestEnemy':
+        return this.fielded(foe);
+      case 'lowestHpAlly': {
+        const allies = this.fielded(side);
+        if (allies.length === 0) return [];
+        let best = allies[0]!;
+        for (const o of allies) {
+          const ro = o.hp / Math.max(1, o.base.maxHp);
+          const rb = best.hp / Math.max(1, best.base.maxHp);
+          if (ro < rb || (ro === rb && o.id < best.id)) best = o;
+        }
+        return [best];
+      }
+      default:
+        return [];
+    }
+  }
+
+  /** チーム効果の常時系（グローバル補正・恒常のステータス補正） */
+  private applyTeamContinuous(te: RuntimeTeamEffect, eff: Effect): void {
+    if (eff.kind === 'globalMod') {
+      const g = this.globals[te.side];
+      const bucket = eff.element ? g.byElement[eff.element] : g.all;
+      this.applyGlobalMod(bucket, eff.key, eff.mode, eff.value);
+      return;
+    }
+    if (eff.kind === 'statMod') {
+      for (const tg of this.teamTargets(te.side, eff.target)) {
+        tg.auraMods.push({
+          stat: eff.stat,
+          mode: eff.mode,
+          value: eff.value,
+          remaining: Number.POSITIVE_INFINITY,
+          sourceId: te.def.id,
+        });
+      }
+    }
+  }
+
+  /**
+   * チーム効果の瞬間系。
+   * チームには参照ステータスがないので、効果量は Amount.flat（固定値）だけを使う。
+   */
+  private applyTeamInstant(te: RuntimeTeamEffect, eff: Effect): void {
+    switch (eff.kind) {
+      case 'statMod': {
+        for (const tg of this.teamTargets(te.side, eff.target)) {
+          tg.timedMods.push({
+            stat: eff.stat,
+            mode: eff.mode,
+            value: eff.value,
+            remaining: eff.duration ?? Number.POSITIVE_INFINITY,
+            sourceId: te.def.id,
+          });
+        }
+        break;
+      }
+      case 'damageReduction': {
+        for (const tg of this.teamTargets(te.side, eff.target)) {
+          tg.reductions.push({ pct: eff.pct, remaining: eff.duration, sourceId: te.def.id });
+        }
+        break;
+      }
+      case 'applyDebuff': {
+        for (const tg of this.teamTargets(te.side, eff.target)) {
+          if (eff.debuff === 'frostbite') tg.debuffs.frostbite.stacks += eff.stacks;
+          else if (eff.debuff === 'paralysis') tg.debuffs.paralysis.stacks += eff.stacks;
+          this.emit({
+            type: 'debuff',
+            target: tg.id,
+            value: eff.stacks,
+            debuff: eff.debuff,
+            note: te.def.name,
+          });
+        }
+        break;
+      }
+      case 'mana': {
+        for (const tg of this.teamTargets(te.side, eff.target)) this.addMana(tg, eff.value);
+        break;
+      }
+      case 'shield': {
+        const v = eff.amount.flat ?? 0;
+        if (v > 0) for (const tg of this.teamTargets(te.side, eff.target)) tg.shield += v;
+        break;
+      }
+      case 'damage': {
+        const v = eff.amount.flat ?? 0;
+        for (const tg of this.teamTargets(te.side, eff.target)) {
+          this.dealDamage(null, tg, v, te.def.name, null);
+        }
+        break;
+      }
+      default:
+        break;
     }
   }
 
@@ -1030,6 +1275,13 @@ export class Battle {
         note: u.defId,
       });
     }
+    for (const te of this.teamEffects) {
+      this.emit({
+        type: 'teamEffect',
+        side: te.side,
+        note: 'register ' + te.source.kind + ':' + te.source.id + ':' + te.def.id,
+      });
+    }
     this.recomputeAuras();
     this.recomputeEffective();
     for (const u of this.units) {
@@ -1038,6 +1290,7 @@ export class Battle {
     for (const u of this.units) {
       this.fireTrigger(u, 'battleStart');
     }
+    this.fireTeamTrigger('battleStart');
     this.recomputeAuras();
     this.recomputeEffective();
   }
@@ -1106,6 +1359,22 @@ export class Battle {
       }
     }
 
+    for (const te of this.teamEffects) {
+      const tr = te.def.trigger;
+      if (tr.kind === 'everyN') {
+        te.timer += dt;
+        if (te.timer >= tr.seconds - EPS) {
+          te.timer -= tr.seconds;
+          this.tryFireTeam(te);
+        }
+      } else if (tr.kind === 'atTime') {
+        if (!te.fired && this.t >= tr.seconds - EPS) {
+          te.fired = true;
+          this.tryFireTeam(te);
+        }
+      }
+    }
+
     // 行動（ユニットID順＝決定論）
     for (const u of this.units) {
       this.actUnit(u);
@@ -1117,7 +1386,16 @@ export class Battle {
   private checkEnd(): boolean {
     const allies = this.fielded('ally');
     const foes = this.fielded('enemy');
-    if (foes.length === 0) {
+    if (foes.length === 0 && allies.length === 0) {
+      // 同時全滅の扱いは設定値
+      this.finished = true;
+      this.outcome =
+        this.cfg.simultaneousWipe === 'win'
+          ? 'win'
+          : this.cfg.simultaneousWipe === 'draw'
+            ? 'draw'
+            : 'lose';
+    } else if (foes.length === 0) {
       this.finished = true;
       this.outcome = 'win';
     } else if (allies.length === 0) {
@@ -1152,8 +1430,8 @@ export class Battle {
 
   result(): BattleResult {
     const duration = this.t;
-    const allyUnits = this.units.filter((u) => u.side === 'ally' && !u.isCarrier);
-    const enemyUnits = this.units.filter((u) => u.side === 'enemy' && !u.isCarrier);
+    const allyUnits = this.units.filter((u) => u.side === 'ally');
+    const enemyUnits = this.units.filter((u) => u.side === 'enemy');
     const allyDamage = allyUnits.reduce((s, u) => s + u.damageDealt, 0);
     const enemyDamage = enemyUnits.reduce((s, u) => s + u.damageDealt, 0);
     const byEl: ElementDamage = { fire: 0, ice: 0, wood: 0, lightning: 0 };

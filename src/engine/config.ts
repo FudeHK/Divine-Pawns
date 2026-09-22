@@ -2,6 +2,9 @@
  * 戦闘の設定値。仕様（2章）を変えずに数値だけ差し替えられるよう、ここに集約する。
  */
 
+/** 両陣営が同じ時刻に全滅した時の扱い */
+export type SimultaneousWipeRule = 'lose' | 'win' | 'draw';
+
 export interface BattleConfig {
   /** 固定タイムステップ（秒） */
   tick: number;
@@ -20,6 +23,15 @@ export interface BattleConfig {
   manaOnAttack: number;
   /** 被弾1回あたりのマナ獲得 */
   manaOnHit: number;
+
+  /**
+   * 戦闘開始から最初の攻撃までの待ち時間（秒）。既定0。
+   * 個体ごとに BattleUnitSpec.initialAttackDelay で上書きできる（「先制」「遅延」系の効果用）。
+   */
+  initialAttackDelay: number;
+
+  /** 両陣営が同じ時刻に全滅した時の扱い */
+  simultaneousWipe: SimultaneousWipeRule;
 
   debuff: {
     burn: {
@@ -84,6 +96,9 @@ export const DEFAULT_CONFIG: BattleConfig = {
 
   manaOnAttack: 10,
   manaOnHit: 5,
+
+  initialAttackDelay: 0,
+  simultaneousWipe: 'lose',
 
   debuff: {
     burn: { coefPerAtk: 0.02, decayPerSecond: 1 },

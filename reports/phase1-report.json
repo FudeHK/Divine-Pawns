@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T20:37:53.336Z",
+  "generatedAt": "2026-09-22T07:05:43.357Z",
   "determinism": {
     "total": 1000,
     "matched": 1000,
@@ -156,7 +156,7 @@
     "battles": 6000,
     "avgDuration": 17.62,
     "timeoutRate": 0,
-    "overallWinRate": 89.5,
+    "overallWinRate": 89.4,
     "perEncounter": [
       {
         "encounter": "E0",
@@ -193,7 +193,7 @@
       {
         "encounter": "E4",
         "battles": 1000,
-        "winRate": 87,
+        "winRate": 86.7,
         "avgDuration": 22.1,
         "timeoutRate": 0,
         "avgAllyDps": 236.5
@@ -201,7 +201,7 @@
       {
         "encounter": "B1",
         "battles": 1000,
-        "winRate": 89.3,
+        "winRate": 89,
         "avgDuration": 26.66,
         "timeoutRate": 0,
         "avgAllyDps": 221.7
@@ -339,8 +339,8 @@
   },
   "perf": {
     "battles": 10000,
-    "seconds": 14.29,
-    "battlesPerSecond": 699.6,
+    "seconds": 15.02,
+    "battlesPerSecond": 665.7,
     "avgTicksPerBattle": 124.7,
     "avgDuration": 12.47,
     "logging": true

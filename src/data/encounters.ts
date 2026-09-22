@@ -1,6 +1,7 @@
 /**
  * 遭遇（E0・E1〜E4・B1）。
  * scale は遭遇ごとの難易度調整用のステータス倍率（HP・攻撃力に乗る）。
+ * 暫定。敵の種類が増えたら、敵ごとの基本値で調整して scale は 1.0 に寄せる。
  */
 
 import type { EncounterDef } from '../engine/types';

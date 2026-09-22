@@ -3,7 +3,7 @@
   "battles": 6000,
   "avgDuration": 17.62,
   "timeoutRate": 0,
-  "overallWinRate": 89.4,
+  "overallWinRate": 89.5,
   "perEncounter": [
     {
       "encounter": "E0",
@@ -40,7 +40,7 @@
     {
       "encounter": "E4",
       "battles": 1000,
-      "winRate": 86.7,
+      "winRate": 87,
       "avgDuration": 22.1,
       "timeoutRate": 0,
       "avgAllyDps": 236.5
@@ -48,7 +48,7 @@
     {
       "encounter": "B1",
       "battles": 1000,
-      "winRate": 89,
+      "winRate": 89.3,
       "avgDuration": 26.66,
       "timeoutRate": 0,
       "avgAllyDps": 221.7

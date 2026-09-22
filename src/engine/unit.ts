@@ -59,8 +59,6 @@ export interface Unit {
   myth: Myth | null;
   star: Star;
   isBoss: boolean;
-  /** 加護など、盤面外で効果だけを持つ器か */
-  isCarrier: boolean;
   /** 盤面に出ているか（false = サポート枠） */
   onField: boolean;
   /** 盤面位置（onField のときのみ意味を持つ） */
@@ -134,8 +132,9 @@ export interface CreateUnitInput {
   base: Stats;
   resist: number;
   isBoss?: boolean;
-  isCarrier?: boolean;
   targeting?: 'nearest' | 'backline';
+  /** 最初の攻撃までの待ち時間（秒） */
+  initialAttackDelay?: number;
 }
 
 export function createUnit(i: CreateUnitInput): Unit {
@@ -149,7 +148,6 @@ export function createUnit(i: CreateUnitInput): Unit {
     myth: i.myth,
     star: i.star,
     isBoss: i.isBoss ?? false,
-    isCarrier: i.isCarrier ?? false,
     onField: i.onField,
     pos: { ...i.pos },
     base: cloneStats(i.base),
@@ -157,7 +155,7 @@ export function createUnit(i: CreateUnitInput): Unit {
     hp: i.base.maxHp,
     shield: 0,
     mana: 0,
-    attackTimer: 0,
+    attackTimer: Math.max(0, i.initialAttackDelay ?? 0),
     moveProgress: 0,
     alive: true,
     resist: i.resist,

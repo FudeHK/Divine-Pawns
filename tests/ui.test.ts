@@ -2,9 +2,6 @@
  * @vitest-environment jsdom
  *
  * 検証用画面の描画テスト。
- * - 盤面アイコンに shortName が出ること
- * - 同じ種類の敵が複数いる時に通し番号が付くこと
- * - アイコンのタップで詳細パネルが開き、再生中は一時停止／閉じると再開すること
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,10 +14,6 @@ function app(): HTMLElement {
   return document.getElementById('app')!;
 }
 
-function texts(sel: string): string[] {
-  return [...app().querySelectorAll(sel)].map((n) => n.textContent ?? '');
-}
-
 function boardTexts(): string[] {
   return [...app().querySelectorAll('svg.board text')].map((n) => n.textContent ?? '');
 }
@@ -31,12 +24,20 @@ function findButton(label: string): HTMLButtonElement | undefined {
     | undefined;
 }
 
-function detailPanel(): HTMLElement | null {
-  return app().querySelector('.detail');
+function sheet(): HTMLElement | null {
+  return app().querySelector('.sheet');
 }
 
-function detailTitle(): string {
-  return detailPanel()?.querySelector('.detail-title')?.textContent ?? '';
+function detailSheet(): HTMLElement | null {
+  return app().querySelector('.sheet.detail');
+}
+
+function sheetTitle(): string {
+  return sheet()?.querySelector('.sheet-title')?.textContent ?? '';
+}
+
+function closeSheet(): void {
+  (app().querySelector('.sheet-close') as HTMLButtonElement).click();
 }
 
 /** 盤面のアイコン（<g>）を短い名前で探す */
@@ -53,35 +54,39 @@ function tap(node: Element): void {
 beforeEach(async () => {
   // 画面の状態は module スコープに持っているので、テストごとに読み込み直す
   vi.resetModules();
-  // 再生ループ（requestAnimationFrame）は止めておく。再生位置は操作で直接確かめる
   vi.stubGlobal('requestAnimationFrame', () => 0);
   document.body.innerHTML = '<div id="app"></div>';
   await import('../src/ui/main');
 });
 
-describe('検証用画面', () => {
-  it('準備中の盤面に、味方と敵の shortName が出る', async () => {
+describe('盤面アイコン', () => {
+  it('準備中の盤面に、味方と敵の shortName が出る', () => {
     const labels = boardTexts();
-    // 初期編成の前衛3体
     for (const id of ['GRE_A', 'NOR_A', 'GRE_B']) {
       const c = CHARACTERS.find((x) => x.id === id)!;
       expect(labels, id).toContain(c.shortName);
     }
-    // 初期遭遇 E1 の敵
     for (const eu of getEncounter('E1').units) {
       expect(labels, eu.enemyId).toContain(getEnemy(eu.enemyId).shortName);
     }
-    // ID そのままの表示は残っていない
     expect(labels).not.toContain('GRE');
   });
 
-  it('同じ種類の敵が複数いる遭遇では、アイコンに通し番号が付く', async () => {
-    // E2 は「朽ちた兵士」が2体
-    findButton('E2')!.click();
-    const enc = getEncounter('E2');
-    const soldiers = enc.units.filter((u) => u.enemyId === 'en_soldier');
-    expect(soldiers.length).toBe(2);
+  it('表示名は14px太字（4文字のときだけ12pxに縮む）', () => {
+    const token = findToken('青銅の')!;
+    const label = [...token.querySelectorAll('text')].find((t) => t.textContent === '青銅の')!;
+    expect(label.getAttribute('font-size')).toBe('14');
+    expect(label.getAttribute('font-weight')).toBe('700');
 
+    // 「霜呼びの」は4文字なので12pxに縮む（E4 に登場）
+    findButton('E4')!.click();
+    const four = findToken('霜呼びの')!;
+    const fourLabel = [...four.querySelectorAll('text')].find((t) => t.textContent === '霜呼びの')!;
+    expect(fourLabel.getAttribute('font-size')).toBe('12');
+  });
+
+  it('同じ種類の敵が複数いる遭遇では、アイコンに通し番号が付く', () => {
+    findButton('E2')!.click();
     const short = getEnemy('en_soldier').shortName;
     const tokens = [...app().querySelectorAll('svg.board g')].filter((g) =>
       [...g.querySelectorAll('text')].some((t) => t.textContent === short),
@@ -92,22 +97,74 @@ describe('検証用画面', () => {
     );
     expect(nums.sort()).toEqual(['1', '2']);
 
-    // 1体しかいない敵には番号が付かない
     const archer = getEnemy('en_archer').shortName;
-    const archerToken = findToken(archer)!;
-    const archerTexts = [...archerToken.querySelectorAll('text')].map((t) => t.textContent);
+    const archerTexts = [...findToken(archer)!.querySelectorAll('text')].map((t) => t.textContent);
     expect(archerTexts).toEqual([archer]);
   });
+});
 
-  it('準備中：味方アイコンのタップで詳細パネルが開く', async () => {
-    expect(detailPanel()).toBeNull();
+describe('キャラ一覧の行', () => {
+  it('名前は1回だけ、IDは別に表示される（全8キャラ）', () => {
+    const cards = [...app().querySelectorAll('.char')];
+    expect(cards.length).toBe(CHARACTERS.length);
+    for (const c of CHARACTERS) {
+      const card = cards.find((x) => x.querySelector('.char-name')?.textContent === c.name);
+      expect(card, c.id).toBeTruthy();
+
+      // 名前は .char-name にちょうど1回
+      const nameEls = [...card!.querySelectorAll('.char-name')];
+      expect(nameEls.length, c.id).toBe(1);
+      expect(nameEls[0]!.textContent, c.id).toBe(c.name);
+
+      // shortName と正式名が並んでいない
+      expect(nameEls[0]!.textContent!.startsWith(c.shortName + ' '), c.id).toBe(false);
+
+      // 行全体で名前の出現は1回だけ
+      const whole = card!.textContent ?? '';
+      expect(whole.split(c.name).length - 1, c.id).toBe(1);
+
+      // ID は別の要素に
+      const idEl = card!.querySelector('.char-id');
+      expect(idEl?.textContent, c.id).toBe(c.id);
+    }
+  });
+
+  it('装備ボタンには選択中の装備名（なければ「装備なし」）が出る', () => {
+    const card = [...app().querySelectorAll('.char')].find(
+      (x) => x.querySelector('.char-id')?.textContent === 'GRE_A',
+    )!;
+    const eqBtn = [...card.querySelectorAll('button')].find((b) => b.textContent === '装備なし');
+    expect(eqBtn).toBeTruthy();
+
+    eqBtn!.click();
+    expect(sheetTitle()).toContain('装備');
+    // シートから「力の腕輪（仮）」を選ぶ
+    const item = [...app().querySelectorAll('.sheet-list-item')].find((n) =>
+      (n.textContent ?? '').includes('力の腕輪'),
+    ) as HTMLButtonElement;
+    item.click();
+    expect(sheet()).toBeNull();
+
+    const card2 = [...app().querySelectorAll('.char')].find(
+      (x) => x.querySelector('.char-id')?.textContent === 'GRE_A',
+    )!;
+    expect([...card2.querySelectorAll('button')].some((b) => b.textContent === '力の腕輪（仮）')).toBe(
+      true,
+    );
+  });
+});
+
+describe('詳細シート', () => {
+  it('味方アイコンのタップで開き、必要な項目がそろっている', () => {
+    expect(sheet()).toBeNull();
     tap(findToken('青銅の')!);
 
-    const panel = detailPanel();
-    expect(panel).not.toBeNull();
-    expect(detailTitle()).toContain('青銅の');
+    const panel = detailSheet()!;
+    expect(panel).toBeTruthy();
+    expect(sheetTitle()).toBe('青銅の守り手（仮）');
+    expect(panel.querySelector('.char-id')!.textContent).toBe('GRE_A');
 
-    const body = panel!.textContent ?? '';
+    const body = panel.textContent ?? '';
     for (const key of ['HP', '攻撃力', '防御', '攻撃速度', '射程', 'マナ', '装備']) {
       expect(body, key).toContain(key);
     }
@@ -116,73 +173,89 @@ describe('検証用画面', () => {
     expect(body).toContain('ギリシャ');
     expect(body).toContain('★1');
 
-    // スキルは3行（アクティブ・パッシブ・サポート効果）
-    const skills = [...panel!.querySelectorAll('.skill')];
-    expect(skills.length).toBe(3);
-    expect(texts('.skill-label')).toEqual(['アクティブ', 'パッシブ', 'サポート効果']);
-    const skillTexts = texts('.skill-text');
-    expect(skillTexts[0]).toBe('周囲の敵を凍傷にし、自分に挑発');
-    for (const s of skillTexts) expect(s.length).toBeLessThanOrEqual(30);
+    const labels = [...panel.querySelectorAll('.skill-label')].map((n) => n.textContent);
+    expect(labels).toEqual(['装備', 'アクティブ', 'パッシブ', 'サポート効果']);
 
-    // 閉じられる
-    findButton('✕ 閉じる')!.click();
-    expect(detailPanel()).toBeNull();
+    closeSheet();
+    expect(sheet()).toBeNull();
   });
 
-  it('準備中：敵アイコンのタップでも詳細パネルが開く', async () => {
-    tap(findToken(getEnemy('en_bulwark').shortName)!);
-    expect(detailTitle()).toContain('石塊の');
-    const body = detailPanel()!.textContent ?? '';
-    expect(body).toContain('タンク');
-    expect(body).toContain('周囲を殴りつけ、自分に挑発');
-  });
-
-
-  it('キャラを選んでいる間は、アイコンのタップは配置になる（詳細は開かない）', () => {
-    // キャラ一覧の名前をタップして選択状態にする
-    const nameEl = [...app().querySelectorAll('.char-name')].find((n) =>
-      (n.textContent ?? '').startsWith('霜の'),
+  it('スキルの［説明］ボタンで小さなポップアップが開き、倍率は書かれていない', () => {
+    tap(findToken('青銅の')!);
+    const active = [...detailSheet()!.querySelectorAll('.skill')].find(
+      (s) => s.querySelector('.skill-label')?.textContent === 'アクティブ',
     )!;
-    tap(nameEl);
-    // 未編成のキャラは盤面にいないので、配置済みアイコンをタップして置き換える
-    tap(findToken('青銅の')!);
-    expect(detailPanel()).toBeNull();
-    expect(findToken('霜の')).toBeTruthy();
+    (active.querySelector('button') as HTMLButtonElement).click();
+
+    const text = [...app().querySelectorAll('.sheet-text')].map((n) => n.textContent).join('\n');
+    expect(text).toBe('周囲の敵を凍傷にし、自分に挑発');
+    expect(text).not.toMatch(/[0-9０-９]|％|%|×/);
+
+    // 閉じると詳細シートに戻る
+    closeSheet();
+    expect(detailSheet()).toBeTruthy();
   });
-  it('再生中：アイコンをタップすると一時停止し、閉じると再開する', async () => {
+
+  it('背景タップと Escape でも閉じられる', () => {
+    tap(findToken('青銅の')!);
+    tap(app().querySelector('.sheet-backdrop')!);
+    expect(sheet()).toBeNull();
+
+    tap(findToken('青銅の')!);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(sheet()).toBeNull();
+  });
+
+  it('敵アイコンのタップでも開く', () => {
+    tap(findToken(getEnemy('en_bulwark').shortName)!);
+    expect(sheetTitle()).toContain('石塊の壁');
+    expect(detailSheet()!.textContent).toContain('タンク');
+  });
+});
+
+describe('再生の一時停止と再開', () => {
+  it('シートを開くと一時停止し、閉じると再開する', () => {
     findButton('▶ 戦闘開始')!.click();
-    // 再生中は「⏸ 一時停止」ボタンが出ている
     expect(findButton('⏸ 一時停止')).toBeTruthy();
 
     tap(findToken('青銅の')!);
-    expect(detailPanel()).not.toBeNull();
-    // 一時停止された
+    expect(detailSheet()).toBeTruthy();
     expect(findButton('▶ 再生')).toBeTruthy();
-    expect(findButton('⏸ 一時停止')).toBeFalsy();
+    expect(detailSheet()!.textContent).toContain('デバフ');
 
-    // 戦闘中はデバフ欄も出る
-    expect(detailPanel()!.textContent).toContain('デバフ');
-
-    findButton('✕ 閉じる')!.click();
-    expect(detailPanel()).toBeNull();
-    // 再開した
+    closeSheet();
+    expect(sheet()).toBeNull();
     expect(findButton('⏸ 一時停止')).toBeTruthy();
   });
 
-  it('再生中：一時停止中に開いて閉じても、再生は始まらない', async () => {
+  it('一時停止中に開いて閉じても、再生は始まらない', () => {
     findButton('▶ 戦闘開始')!.click();
     findButton('⏸ 一時停止')!.click();
-    expect(findButton('▶ 再生')).toBeTruthy();
-
     tap(findToken('青銅の')!);
-    findButton('✕ 閉じる')!.click();
+    closeSheet();
     expect(findButton('▶ 再生')).toBeTruthy();
   });
+});
 
-  it('再生中：敵アイコンのタップでも詳細が開く', async () => {
+describe('画面下部の固定バー', () => {
+  it('準備中は開始ボタン、再生中は倍速とスキップが並ぶ', () => {
+    const bar = () => app().querySelector('.bottom-bar')!;
+    expect(bar().textContent).toContain('戦闘開始');
+
     findButton('▶ 戦闘開始')!.click();
-    tap(findToken(getEnemy('en_bulwark').shortName)!);
-    expect(detailTitle()).toContain('石塊の');
-    expect(detailPanel()!.textContent).toContain('デバフ');
+    const t = bar().textContent ?? '';
+    for (const s of ['1倍', '2倍', '4倍', 'スキップ']) expect(t).toContain(s);
+  });
+});
+
+describe('キャラを選んでいる間の配置', () => {
+  it('アイコンのタップは配置になり、詳細は開かない', () => {
+    const nameEl = [...app().querySelectorAll('.char-name')].find(
+      (n) => n.textContent === '霜の語り部（仮）',
+    )!;
+    tap(nameEl);
+    tap(findToken('青銅の')!);
+    expect(sheet()).toBeNull();
+    expect(findToken('霜の')).toBeTruthy();
   });
 });

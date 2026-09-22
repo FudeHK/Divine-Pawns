@@ -1,10 +1,31 @@
+/*
+ * 検証用画面のスタイル。
+ * 文字サイズとタップ領域は CSS 変数で一元管理する。
+ * 本文16px以上・補足14px以上・見出し18px以上・タップ領域44px以上。
+ * 12px を使ってよいのは ID の表示（.char-id / .mono-id）だけ。
+ */
+
 :root {
+  /* 文字サイズ */
+  --font-title: 20px;
+  --font-heading: 18px;
+  --font-body: 16px;
+  --font-num: 16px;
+  --font-sub: 14px;
+  /* ID の表示だけに使う小さい文字 */
+  --font-id: 12px;
+
+  /* タップ領域 */
+  --tap: 44px;
+  --gap: 8px;
+
+  /* 配色（ダークテーマ） */
   --bg: #12131a;
   --panel: #1c1e28;
   --panel2: #242737;
   --line: #333849;
   --text: #e8eaf2;
-  --muted: #8d93a8;
+  --muted: #9aa1b8;
   --ally: #4aa3ff;
   --enemy: #ff6b6b;
   --accent: #ffcc52;
@@ -13,6 +34,8 @@
   --ice: #6fd2ff;
   --wood: #7ed957;
   --lightning: #d29bff;
+
+  --bar-h: 72px;
 }
 
 * {
@@ -27,8 +50,9 @@ body {
   background: #0b0c11;
   color: var(--text);
   font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 #app {
@@ -37,47 +61,47 @@ body {
   margin: 0 auto;
   min-height: 100vh;
   background: var(--bg);
-  padding: 10px 10px 40px;
+  padding: 10px 10px calc(var(--bar-h) + 24px);
+  overflow-x: hidden;
 }
 
 h1 {
-  font-size: 15px;
+  font-size: var(--font-title);
   margin: 4px 0 10px;
-  letter-spacing: 0.02em;
 }
 
 h2 {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 14px 0 6px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: var(--font-heading);
+  color: var(--text);
+  margin: 16px 0 8px;
+  font-weight: 700;
 }
 
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 8px;
+  padding: var(--gap);
 }
 
 .row {
   display: flex;
-  gap: 6px;
+  gap: var(--gap);
   align-items: center;
   flex-wrap: wrap;
 }
 
 button {
   font: inherit;
-  font-size: 12px;
+  font-size: var(--font-sub);
   color: var(--text);
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 10px;
+  padding: 8px 12px;
   cursor: pointer;
-  min-height: 34px;
+  min-height: var(--tap);
+  min-width: var(--tap);
 }
 
 button:active {
@@ -96,40 +120,41 @@ button:disabled {
   cursor: default;
 }
 
-button.small {
-  padding: 3px 7px;
-  min-height: 26px;
-  font-size: 11px;
+button.wide {
+  flex: 1;
 }
 
 input[type='text'] {
   font: inherit;
-  font-size: 12px;
+  font-size: var(--font-body);
   color: var(--text);
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 8px;
+  border-radius: 10px;
+  padding: 10px;
   width: 100%;
-  min-height: 34px;
+  min-height: var(--tap);
 }
 
 select {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--font-sub);
   color: var(--text);
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 3px 4px;
-  min-height: 26px;
+  border-radius: 10px;
+  padding: 8px;
+  min-height: var(--tap);
+  min-width: var(--tap);
 }
+
+/* --- キャラ一覧 --- */
 
 .char {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px;
-  margin-bottom: 5px;
+  border-radius: 10px;
+  padding: var(--gap);
+  margin-bottom: var(--gap);
   background: var(--panel2);
 }
 
@@ -146,18 +171,31 @@ select {
 }
 
 .char-name {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-body);
+  font-weight: 700;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+}
+
+/* ID の表示だけは 12px を使う（例外） */
+.char-id,
+.mono-id {
+  font-size: var(--font-id);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .tag {
-  font-size: 10px;
-  padding: 1px 5px;
+  font-size: var(--font-sub);
+  padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid currentColor;
   white-space: nowrap;
@@ -178,11 +216,13 @@ select {
 
 .char-sub {
   display: flex;
-  gap: 5px;
+  gap: var(--gap);
   align-items: center;
-  margin-top: 5px;
+  margin-top: 6px;
   flex-wrap: wrap;
 }
+
+/* --- 盤面 --- */
 
 .board {
   width: 100%;
@@ -194,32 +234,68 @@ select {
 }
 
 .hint {
-  font-size: 11px;
+  font-size: var(--font-sub);
   color: var(--muted);
   margin: 6px 0;
-  min-height: 16px;
+  min-height: 20px;
 }
 
 .err {
   color: var(--enemy);
 }
 
+.stat {
+  font-size: var(--font-sub);
+  color: var(--muted);
+}
+
+.num {
+  font-size: var(--font-num);
+}
+
+.result {
+  font-size: var(--font-heading);
+  font-weight: 700;
+  padding: 8px 0;
+}
+.result.win {
+  color: var(--ok);
+}
+.result.lose {
+  color: var(--enemy);
+}
+.result.timeout,
+.result.draw {
+  color: var(--accent);
+}
+
+.unit-line {
+  cursor: pointer;
+  padding: 8px 4px;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-size: var(--font-sub);
+  border-bottom: 1px solid var(--line);
+}
+
+/* --- ログ --- */
+
 .log {
-  height: 190px;
+  height: 220px;
   overflow-y: auto;
+  overflow-x: auto;
   background: #0e0f16;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px;
+  border-radius: 10px;
+  padding: var(--gap);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 10.5px;
-  line-height: 1.45;
+  font-size: var(--font-sub);
+  line-height: 1.6;
 }
 
 .log div {
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .log .t {
@@ -232,54 +308,69 @@ select {
   color: var(--enemy);
 }
 
-.stat {
-  font-size: 11px;
-  color: var(--muted);
-}
+/* --- 画面下部の固定バー --- */
 
-.result {
-  font-size: 15px;
-  font-weight: 700;
-  padding: 6px 0;
-}
-.result.win {
-  color: var(--ok);
-}
-.result.lose {
-  color: var(--enemy);
-}
-.result.timeout {
-  color: var(--accent);
-}
-
-.legend {
-  font-size: 10px;
-  color: var(--muted);
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-
-/* --- 詳細パネル --- */
-.detail {
+.bottom-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 430px;
   background: var(--panel);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 8px;
-  margin: 8px 0;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  z-index: 20;
 }
 
-.detail-head {
+.bottom-bar button {
+  flex: 1;
+}
+
+/* --- 下部シート（ポップアップ） --- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 40;
+}
+
+.sheet {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 430px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  padding: 12px 12px 24px;
+  z-index: 41;
+}
+
+.sheet.small {
+  max-height: 60vh;
+}
+
+.sheet-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap);
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--gap);
 }
 
-.detail-title {
-  font-size: 13px;
+.detail-title,
+.sheet-title {
+  font-size: var(--font-heading);
   font-weight: 700;
   flex: 1;
   min-width: 0;
@@ -288,12 +379,22 @@ select {
   white-space: nowrap;
 }
 
+.sheet-close {
+  width: var(--tap);
+  height: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  font-size: var(--font-body);
+}
+
 .detail-grid {
   display: grid;
-  grid-template-columns: 4.8em 1fr 4.8em 1fr;
-  gap: 2px 6px;
-  margin: 6px 0;
-  font-size: 11px;
+  grid-template-columns: 5.2em 1fr 5.2em 1fr;
+  gap: 6px var(--gap);
+  margin: 10px 0;
+  font-size: var(--font-sub);
+  align-items: center;
 }
 
 .detail-grid .dk {
@@ -303,6 +404,7 @@ select {
 
 .detail-grid .dv {
   color: var(--text);
+  font-size: var(--font-num);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -310,25 +412,52 @@ select {
 
 .skill {
   display: flex;
-  gap: 6px;
-  align-items: baseline;
-  font-size: 11px;
-  padding: 2px 0;
+  gap: var(--gap);
+  align-items: center;
+  font-size: var(--font-sub);
+  padding: 6px 0;
   border-top: 1px solid var(--line);
+  min-height: var(--tap);
 }
 
 .skill-label {
   color: var(--muted);
-  width: 5.6em;
+  width: 6.4em;
   flex: 0 0 auto;
 }
 
-.skill-text {
+.skill-name {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-body);
 }
 
-.unit-line {
-  cursor: pointer;
-  padding: 1px 0;
+.sheet-list-item {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  margin-bottom: var(--gap);
+  padding: 10px 12px;
+  min-height: var(--tap);
+}
+
+.sheet-list-item .li-name {
+  font-size: var(--font-body);
+  font-weight: 700;
+}
+
+.sheet-list-item .li-desc {
+  font-size: var(--font-sub);
+  color: var(--muted);
+}
+
+.sheet-text {
+  font-size: var(--font-body);
+  line-height: 1.7;
+  margin: var(--gap) 0;
 }

@@ -54,7 +54,7 @@ function snapshot(b: Battle): ReplayFrame {
   return {
     t: b.t,
     units: b.units
-      .filter((u) => !u.isCarrier)
+
       .map((u) => ({
         id: u.id,
         pos: { ...u.pos },
@@ -109,7 +109,7 @@ export function buildReplay(setup: BattleSetup): Replay {
   const r = b.result();
 
   const units: ReplayUnit[] = b.units
-    .filter((u) => !u.isCarrier)
+
     .map((u) => ({
       id: u.id,
       defId: u.defId,

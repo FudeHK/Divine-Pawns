@@ -1,7 +1,7 @@
 {
   "battles": 10000,
-  "seconds": 14.29,
-  "battlesPerSecond": 699.6,
+  "seconds": 15.02,
+  "battlesPerSecond": 665.7,
   "avgTicksPerBattle": 124.7,
   "avgDuration": 12.47,
   "logging": true

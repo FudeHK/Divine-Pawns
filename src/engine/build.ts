@@ -6,7 +6,7 @@ import { getBlessing } from '../data/blessings';
 import { getCharacter } from '../data/characters';
 import { getEnemy } from '../data/enemies';
 import { getEquipment } from '../data/equipment';
-import type { BattleSetup, BattleUnitSpec } from './battle';
+import type { BattleSetup, BattleUnitSpec, TeamEffect } from './battle';
 import { DEFAULT_CONFIG, type BattleConfig } from './config';
 import {
   buildStats,
@@ -115,37 +115,13 @@ export function buildBattleSetup(
     });
   }
 
-  // 加護の戦闘中効果は、盤面に出ない「加護キャリア」に持たせる
-  const blessingEffects: { def: EffectDef; origin: string }[] = [];
+  // 加護の戦闘中効果は「チーム効果」として持つ（ユニットにはしない）
+  const teamEffects: TeamEffect[] = [];
   for (const bid of loadout.blessings) {
     const b = getBlessing(bid);
-    for (const e of b.effects ?? []) blessingEffects.push({ def: e, origin: 'blessing' });
-  }
-  if (blessingEffects.length > 0) {
-    units.push({
-      id: 'Z_ally',
-      defId: 'blessing_carrier',
-      name: '加護',
-      side: 'ally',
-      role: 'support',
-      element: 'fire',
-      myth: null,
-      star: 1,
-      onField: false,
-      pos: { x: 0, y: 5 },
-      stats: {
-        maxHp: 1,
-        atk: 0,
-        def: 0,
-        atkSpeed: 1,
-        range: 1,
-        maxMana: 100,
-        moveSpeed: 1,
-      },
-      resist: 0,
-      isCarrier: true,
-      effects: blessingEffects,
-    });
+    for (const e of b.effects ?? []) {
+      teamEffects.push({ side: 'ally', def: e, source: { kind: 'blessing', id: b.id } });
+    }
   }
 
   // 敵
@@ -184,6 +160,7 @@ export function buildBattleSetup(
   return {
     seed: opts.seed,
     units,
+    teamEffects,
     config: cfg,
     logging: opts.logging ?? true,
   };

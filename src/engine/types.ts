@@ -330,7 +330,10 @@ export interface BlessingDef {
 export interface EncounterUnitDef {
   enemyId: string;
   pos: Hex;
-  /** 個別のステータス倍率（遭遇の難易度調整用） */
+  /**
+   * 個別のステータス倍率（HP・攻撃力に乗る）。
+   * 暫定。敵の種類が増えたら、敵ごとの基本値で調整する。
+   */
   scale?: number;
 }
 
