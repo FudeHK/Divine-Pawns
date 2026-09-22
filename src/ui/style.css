@@ -634,3 +634,204 @@ select {
 .rarity-epic {
   color: var(--accent);
 }
+
+/* --- 重ねたシート（背面は操作できない） --- */
+
+.sheet.behind,
+.sheet-backdrop.behind {
+  pointer-events: none;
+}
+
+.sheet.behind {
+  filter: brightness(0.75);
+}
+
+/* --- 現在カード表示中のキャラのハイライト（戦闘中の表示とは別色） --- */
+
+.focus-ring {
+  pointer-events: none;
+}
+
+/* --- 編成タブ：1体ずつのカード --- */
+
+.team-summary {
+  font-size: var(--font-body);
+  font-weight: 700;
+  padding: 2px 0 4px;
+}
+
+.char-pager {
+  display: flex;
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+.char-pager .char {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.pager-prev,
+.pager-next {
+  flex: 0 0 auto;
+  width: var(--tap);
+  font-size: var(--font-body);
+}
+
+.char-page-indicator {
+  text-align: center;
+  font-size: var(--font-sub);
+  color: var(--muted);
+  padding-top: 4px;
+}
+
+.char-idrow {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.char-slot-state {
+  font-size: var(--font-sub);
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #11131c;
+}
+
+.char-slot-state.state-frontline {
+  color: var(--ally);
+}
+.char-slot-state.state-support {
+  color: var(--ok);
+}
+.char-slot-state.state-none {
+  color: var(--muted);
+}
+
+.char-quick {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.quick-cell {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+}
+
+.quick-k {
+  font-size: var(--font-sub);
+  color: var(--muted);
+}
+
+.quick-v {
+  font-size: var(--font-num);
+}
+
+.char-skills {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.skill-icon,
+.equip-chip {
+  flex: 0 0 auto;
+  width: var(--tap);
+  padding: 0;
+  font-size: var(--font-sub);
+}
+
+/* --- ラン進行 --- */
+
+.run-status {
+  font-size: var(--font-body);
+  font-weight: 700;
+  padding: 2px 0 4px;
+}
+
+.run-map {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+
+.run-node {
+  font-size: var(--font-sub);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.run-node.done {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.run-node.current {
+  color: #1a1206;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin: var(--gap) 0;
+}
+
+.shop-row {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: var(--gap);
+  background: var(--panel2);
+  min-height: var(--tap);
+}
+
+.shop-row.sold {
+  opacity: 0.5;
+}
+
+.shop-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-name {
+  font-size: var(--font-body);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shop-desc {
+  font-size: var(--font-sub);
+  color: var(--muted);
+}
+
+.event-title {
+  font-size: var(--font-heading);
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.event-text {
+  font-size: var(--font-body);
+  line-height: 1.6;
+  margin: 4px 0 var(--gap);
+}

@@ -1,18 +1,21 @@
 /**
- * Divine Pawns（仮題）の検証用画面。
+ * Divine Pawns（仮題）の画面。
  *
  * 画面は2層。
  *   上: 盤面（常に見える。残りの高さいっぱい）
- *   下: タブ付きの操作バー（編成 / 加護 / 操作）＋ いつでも押せる実行ボタン
+ *   下: タブ付きの操作バー（編成 / 加護 / ラン / 操作）＋ いつでも押せる実行ボタン
+ *
+ * 「ラン」タブを使っていない間は、単発の戦闘を試すサンドボックスとして動く。
  */
 
 import './style.css';
 
-import { BLESSINGS } from '../data/blessings';
+import { BLESSINGS, getBlessing } from '../data/blessings';
 import { CHARACTERS, getCharacter } from '../data/characters';
 import { ENCOUNTERS, getEncounter } from '../data/encounters';
 import { getEnemy } from '../data/enemies';
 import { EQUIPMENT, getEquipment } from '../data/equipment';
+import { getEvent } from '../data/events';
 import { buildBattleSetup, resolveMembers } from '../engine/build';
 import { DEFAULT_CONFIG } from '../engine/config';
 import { ALLY_CELLS, ALL_CELLS, isCellOfSide } from '../engine/hex';
@@ -31,6 +34,21 @@ import type {
   Star,
   Stats,
 } from '../engine/types';
+import { DEFAULT_RUN_CONFIG } from '../game/config';
+import {
+  advanceNode,
+  applyBattleResult,
+  buyShopItem,
+  chooseEvent,
+  createRun,
+  currentNode,
+  progressMap,
+  rerollShop,
+  resolveEventBattle,
+  runLoadout,
+} from '../game/run';
+import { clearRun, loadRun, saveRun } from '../game/save';
+import type { RunState, ShopItem } from '../game/types';
 import { formatNumber } from '../util/format';
 import { buildReplay, type Replay } from './replay';
 
@@ -39,7 +57,7 @@ import { buildReplay, type Replay } from './replay';
 // ---------------------------------------------------------------------------
 
 type Slot = 'none' | 'frontline' | 'support';
-type Tab = 'team' | 'blessing' | 'control';
+type Tab = 'team' | 'blessing' | 'run' | 'control';
 
 interface Assignment {
   slot: Slot;
@@ -49,24 +67,41 @@ interface Assignment {
   pos: Hex | null;
 }
 
+/** 編成に出す1人分（サンドボックスとランの両方をこの形で扱う） */
+interface Member {
+  /** サンドボックスはキャラID、ランは所持個体のUID */
+  key: string;
+  charId: string;
+  star: Star;
+  /** 装備（★の数だけ。空きは ''） */
+  equipment: string[];
+  slot: Slot;
+  pos: Hex | null;
+}
+
 /** 詳細シートで見せる対象 */
 type DetailTarget =
-  | { kind: 'char'; charId: string }
+  | { kind: 'member'; key: string }
   | { kind: 'enemySlot'; index: number }
   | { kind: 'unit'; unitId: string };
 
 /** 画面下から開くシート。重ねて開ける（閉じると1つ上の階層に戻る） */
 type Sheet =
   | { kind: 'detail'; target: DetailTarget }
-  | { kind: 'equip'; charId: string; slot: number }
+  | { kind: 'equip'; key: string; slot: number }
   | { kind: 'blessings' }
   | { kind: 'explain'; title: string; text: string };
 
+/** 戦闘が終わったあと、どう扱うか */
+type BattleContext = 'sandbox' | 'runNode' | 'runEvent';
+
 const team = DEFAULT_CONFIG.team;
+const runCfg = DEFAULT_RUN_CONFIG;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'team', label: '編成' },
   { id: 'blessing', label: '加護' },
+  { id: 'run', label: 'ラン' },
   { id: 'control', label: '操作' },
 ];
 
@@ -75,15 +110,27 @@ const state = {
   encounterId: 'E1',
   assign: new Map<string, Assignment>(),
   blessings: new Set<string>(),
+  /** 配置モードで選んでいるメンバーの key */
   selected: null as string | null,
   message: '',
   replay: null as Replay | null,
+  battleContext: 'sandbox' as BattleContext,
+  /** 戦闘の結果をまだラン側に反映していない */
+  pendingResult: false,
   frame: 0,
   playing: false,
   speed: 1 as 1 | 2 | 4,
   tab: 'team' as Tab,
+  /** 「編成」タブで今表示しているメンバーの番号 */
+  cardIndex: 0,
   sheets: [] as Sheet[],
   resumeAfterSheet: false,
+
+  /** 進行中のラン */
+  run: null as RunState | null,
+  /** 保存されたランを見つけた（再開するか聞く） */
+  savedRun: null as RunState | null,
+  runMessage: '',
 };
 
 for (const c of CHARACTERS) {
@@ -146,6 +193,13 @@ const RARITY_LABEL: Record<Rarity, string> = {
   rare: 'レア',
   epic: 'エピック',
 };
+const NODE_LABEL: Record<string, string> = {
+  battle: '戦闘',
+  shop: 'ショップ',
+  event: 'イベント',
+  boss: '章ボス',
+  bossShop: 'ボスショップ',
+};
 
 // ---------------------------------------------------------------------------
 // 参照ヘルパー
@@ -167,8 +221,18 @@ function shortNameOf(defId: string): string {
   return charOf(defId)?.shortName ?? enemyOf(defId)?.shortName ?? defId.slice(0, 4);
 }
 
+/** 今の遭遇（ラン中はノードの遭遇を使う） */
+function activeEncounterId(): string {
+  const run = state.run;
+  if (run && run.phase === 'node') {
+    const n = currentNode(run, runCfg);
+    if (n?.encounterId) return n.encounterId;
+  }
+  return state.encounterId;
+}
+
 function enemyDupIndexes(): (number | null)[] {
-  const units = getEncounter(state.encounterId).units;
+  const units = getEncounter(activeEncounterId()).units;
   const counts = new Map<string, number>();
   for (const u of units) counts.set(u.enemyId, (counts.get(u.enemyId) ?? 0) + 1);
   const seen = new Map<string, number>();
@@ -181,35 +245,115 @@ function enemyDupIndexes(): (number | null)[] {
 }
 
 /** 装備スロットの一覧（★の数だけ。空きは ''） */
-function slotsOf(a: Assignment): string[] {
-  const n = equipmentSlots(a.star);
+function padSlots(equipment: string[], star: Star): string[] {
+  const n = equipmentSlots(star);
   const out: string[] = [];
-  for (let i = 0; i < n; i++) out.push(a.equipment[i] ?? '');
+  for (let i = 0; i < n; i++) out.push(equipment[i] ?? '');
   return out;
 }
 
-/** 実際に着けている装備の数 */
-function equippedCount(a: Assignment): number {
-  return slotsOf(a).filter((x) => x !== '').length;
+// ---------------------------------------------------------------------------
+// 編成（サンドボックス／ラン を同じ形で扱う）
+// ---------------------------------------------------------------------------
+
+function inRun(): boolean {
+  return state.run !== null && state.run.phase === 'node';
 }
 
-// ---------------------------------------------------------------------------
-// 編成の組み立て
-// ---------------------------------------------------------------------------
-
-function currentLoadout(): Loadout {
-  const frontline = [];
-  const support = [];
-  for (const c of CHARACTERS) {
+function party(): Member[] {
+  const run = state.run;
+  if (run) {
+    return run.roster.map((o) => ({
+      key: o.uid,
+      charId: o.charId,
+      star: o.star,
+      equipment: padSlots(o.equipment, o.star),
+      slot: o.slot,
+      pos: o.pos ?? null,
+    }));
+  }
+  return CHARACTERS.map((c) => {
     const a = state.assign.get(c.id)!;
-    if (a.slot === 'none') continue;
-    const e = {
+    return {
+      key: c.id,
       charId: c.id,
       star: a.star,
-      equipment: slotsOf(a).filter((x) => x !== ''),
-      pos: a.pos ?? undefined,
+      equipment: padSlots(a.equipment, a.star),
+      slot: a.slot,
+      pos: a.pos,
     };
-    if (a.slot === 'frontline') frontline.push(e);
+  });
+}
+
+function memberOf(key: string): Member | undefined {
+  return party().find((m) => m.key === key);
+}
+
+interface MemberBox {
+  star: Star;
+  equipment: string[];
+  slot: Slot;
+  pos: Hex | null;
+}
+
+function updateMember(key: string, fn: (m: MemberBox) => void): void {
+  const run = state.run;
+  if (run) {
+    const o = run.roster.find((x) => x.uid === key);
+    if (!o) return;
+    const box: MemberBox = {
+      star: o.star,
+      equipment: padSlots(o.equipment, o.star),
+      slot: o.slot,
+      pos: o.pos ?? null,
+    };
+    fn(box);
+    o.star = box.star;
+    o.equipment = box.equipment;
+    o.slot = box.slot;
+    o.pos = box.pos ?? undefined;
+    autoSave();
+    return;
+  }
+  const a = state.assign.get(key);
+  if (!a) return;
+  const box: MemberBox = {
+    star: a.star,
+    equipment: padSlots(a.equipment, a.star),
+    slot: a.slot,
+    pos: a.pos,
+  };
+  fn(box);
+  a.star = box.star;
+  a.equipment = box.equipment;
+  a.slot = box.slot;
+  a.pos = box.pos;
+}
+
+/** 枠の上限（ラン中はランの枠数） */
+function slotLimits(): { frontline: number; support: number } {
+  const run = state.run;
+  if (run) return { frontline: run.frontlineSlots, support: run.supportSlots };
+  return { frontline: team.frontlineSlotsDefault, support: team.supportSlotsDefault };
+}
+
+function countSlot(slot: Slot): number {
+  return party().filter((m) => m.slot === slot).length;
+}
+
+function currentLoadout(): Loadout {
+  if (state.run) return runLoadout(state.run);
+  const frontline = [];
+  const support = [];
+  for (const m of party()) {
+    if (m.slot === 'none') continue;
+    const e = {
+      charId: m.charId,
+      star: m.star,
+      equipment: m.equipment.filter((x) => x !== ''),
+      pos: m.pos ?? undefined,
+    };
+    if (m.slot === 'frontline') frontline.push(e);
     else support.push(e);
   }
   return { frontline, support, blessings: [...state.blessings] };
@@ -217,11 +361,10 @@ function currentLoadout(): Loadout {
 
 function validateLoadout(): string | null {
   const lo = currentLoadout();
+  const lim = slotLimits();
   if (lo.frontline.length === 0) return '前衛を1体以上入れてください';
-  if (lo.frontline.length > team.frontlineSlotsMax)
-    return `前衛は最大 ${team.frontlineSlotsMax} 体です`;
-  if (lo.support.length > team.supportSlotsMax)
-    return `サポートは最大 ${team.supportSlotsMax} 体です`;
+  if (lo.frontline.length > lim.frontline) return `前衛は最大 ${lim.frontline} 体です`;
+  if (lo.support.length > lim.support) return `サポートは最大 ${lim.support} 体です`;
   const keys = new Set<string>();
   for (const e of lo.frontline) {
     if (!e.pos) return '配置されていない前衛がいます';
@@ -234,44 +377,39 @@ function validateLoadout(): string | null {
 }
 
 function occupiedBy(cell: Hex): string | null {
-  for (const c of CHARACTERS) {
-    const a = state.assign.get(c.id)!;
-    if (a.slot === 'frontline' && a.pos && a.pos.x === cell.x && a.pos.y === cell.y) {
-      return c.id;
-    }
+  for (const m of party()) {
+    if (m.slot === 'frontline' && m.pos && m.pos.x === cell.x && m.pos.y === cell.y) return m.key;
   }
   return null;
 }
 
-function countSlot(slot: Slot): number {
-  let n = 0;
-  for (const a of state.assign.values()) if (a.slot === slot) n++;
-  return n;
+function freeCell(): Hex | null {
+  const c = ALLY_CELLS.find((x) => !occupiedBy(x));
+  return c ? { ...c } : null;
 }
 
 // ---------------------------------------------------------------------------
 // 盤面の描画
 // ---------------------------------------------------------------------------
 
-/**
- * 盤面は viewBox の幅を 360 にして横幅いっぱいに広げる。
- * 基準の幅360pxでは 1ユーザー単位 = 1px なので、文字サイズをそのまま px として指定できる。
- */
 const BOARD_W = 360;
 const SQ3 = Math.sqrt(3);
 const R = (BOARD_W - 4) / (SQ3 * 5.5);
 const BOARD_H = 1.5 * R * 5 + 2 * R + 4;
+
+/** 「編成」タブで表示中のキャラを示す色（戦闘中の表示とは別色） */
+const FOCUS_COLOR = '#ff7ae0';
 
 /** 盤面アイコンの表示名。4文字で収まらない時だけ12pxまで縮める */
 function labelFontSize(label: string): number {
   return label.length >= 4 ? 12 : 14;
 }
 
-function hexCenter(h: Hex): { cx: number; cy: number } {
-  const off = (h.y & 1) === 1 ? 0.5 : 0;
+function hexCenter(hex: Hex): { cx: number; cy: number } {
+  const off = (hex.y & 1) === 1 ? 0.5 : 0;
   return {
-    cx: 2 + SQ3 * R * (h.x + off) + (SQ3 * R) / 2,
-    cy: 2 + 1.5 * R * h.y + R,
+    cx: 2 + SQ3 * R * (hex.x + off) + (SQ3 * R) / 2,
+    cy: 2 + 1.5 * R * hex.y + R,
   };
 }
 
@@ -299,15 +437,27 @@ function drawToken(
   cy: number,
   label: string,
   color: string,
-  opts: { star?: Star | null; dupIndex?: number | null; onTap?: () => void } = {},
+  opts: {
+    star?: Star | null;
+    dupIndex?: number | null;
+    /** 「編成」タブで表示中のキャラ */
+    focused?: boolean;
+    onTap?: () => void;
+  } = {},
 ): void {
   const g = el('g');
+  if (opts.focused) g.setAttribute('class', 'token focused');
   if (opts.onTap) {
     g.setAttribute('style', 'cursor:pointer');
     g.addEventListener('click', (ev) => {
       ev.stopPropagation();
       opts.onTap!();
     });
+  }
+  if (opts.focused) {
+    g.appendChild(
+      el('circle', { cx, cy, r: R * 0.86, fill: 'none', stroke: FOCUS_COLOR, 'stroke-width': 3 }),
+    );
   }
   g.appendChild(el('circle', { cx, cy, r: R * 0.74, fill: color, opacity: 0.94 }));
   g.appendChild(
@@ -383,21 +533,37 @@ function renderBoard(): SVGSVGElement {
   }
 
   if (!rep) {
-    for (const c of CHARACTERS) {
-      const a = state.assign.get(c.id)!;
-      if (a.slot !== 'frontline' || !a.pos) continue;
-      const { cx, cy } = hexCenter(a.pos);
-      const cell = a.pos;
-      drawToken(svg, cx, cy, c.shortName, '#4aa3ff', {
-        star: a.star,
+    // いま「編成」タブのカードに出ているキャラの居場所を強調する
+    const focus = currentCardMember();
+    if (focus && focus.slot === 'frontline' && focus.pos) {
+      const { cx, cy } = hexCenter(focus.pos);
+      svg.appendChild(
+        el('polygon', {
+          class: 'focus-ring',
+          points: hexPoints(cx, cy, R * 0.99),
+          fill: 'none',
+          stroke: FOCUS_COLOR,
+          'stroke-width': 4,
+          'stroke-dasharray': '10 6',
+        }),
+      );
+    }
+
+    for (const m of party()) {
+      if (m.slot !== 'frontline' || !m.pos) continue;
+      const { cx, cy } = hexCenter(m.pos);
+      const cell = m.pos;
+      drawToken(svg, cx, cy, getCharacter(m.charId).shortName, '#4aa3ff', {
+        star: m.star,
+        focused: focus ? m.key === focus.key : false,
         onTap: () => {
           if (state.selected) onCellTap(cell);
-          else openSheet({ kind: 'detail', target: { kind: 'char', charId: c.id } });
+          else openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } });
         },
       });
     }
     const dup = enemyDupIndexes();
-    getEncounter(state.encounterId).units.forEach((eu, i) => {
+    getEncounter(activeEncounterId()).units.forEach((eu, i) => {
       const { cx, cy } = hexCenter(eu.pos);
       drawToken(svg, cx, cy, getEnemy(eu.enemyId).shortName, '#ff6b6b', {
         dupIndex: dup[i] ?? null,
@@ -500,51 +666,55 @@ function renderBoard(): SVGSVGElement {
 function onCellTap(cell: Hex): void {
   if (!state.selected) {
     const occ = occupiedBy(cell);
-    if (occ) openSheet({ kind: 'detail', target: { kind: 'char', charId: occ } });
+    if (occ) openSheet({ kind: 'detail', target: { kind: 'member', key: occ } });
     else {
       state.message = '「編成」タブでキャラを選んでから、マスをタップ';
       render();
     }
     return;
   }
-  const a = state.assign.get(state.selected)!;
-  if (a.slot !== 'frontline') a.slot = 'frontline';
+  const key = state.selected;
+  const me = memberOf(key);
+  if (!me) return;
+  const prev = me.pos;
   const occ = occupiedBy(cell);
-  if (occ && occ !== state.selected) {
-    state.assign.get(occ)!.pos = a.pos;
-  }
-  a.pos = { ...cell };
-  state.message = `${getCharacter(state.selected).shortName} を (${cell.x},${cell.y}) に配置`;
+  if (occ && occ !== key) updateMember(occ, (o) => (o.pos = prev));
+  updateMember(key, (o) => {
+    o.slot = 'frontline';
+    o.pos = { ...cell };
+  });
+  state.message = `${getCharacter(me.charId).shortName} を (${cell.x},${cell.y}) に配置`;
   state.selected = null;
   render();
 }
 
-function setSlot(charId: string, slot: Slot): void {
-  const a = state.assign.get(charId)!;
-  if (a.slot === slot) {
-    a.slot = 'none';
-    a.pos = null;
-    if (state.selected === charId) state.selected = null;
+function setSlot(key: string, slot: Slot): void {
+  const me = memberOf(key);
+  if (!me) return;
+  const lim = slotLimits();
+  if (me.slot === slot) {
+    updateMember(key, (o) => {
+      o.slot = 'none';
+      o.pos = null;
+    });
+    if (state.selected === key) state.selected = null;
   } else {
-    if (slot === 'frontline' && countSlot('frontline') >= team.frontlineSlotsMax && a.slot !== 'frontline') {
-      state.message = `前衛は最大 ${team.frontlineSlotsMax} 体です`;
+    if (slot === 'frontline' && countSlot('frontline') >= lim.frontline) {
+      state.message = `前衛は最大 ${lim.frontline} 体です`;
       render();
       return;
     }
-    if (slot === 'support' && countSlot('support') >= team.supportSlotsMax && a.slot !== 'support') {
-      state.message = `サポートは最大 ${team.supportSlotsMax} 体です`;
+    if (slot === 'support' && countSlot('support') >= lim.support) {
+      state.message = `サポートは最大 ${lim.support} 体です`;
       render();
       return;
     }
-    a.slot = slot;
-    if (slot === 'frontline' && !a.pos) {
-      const free = ALLY_CELLS.find((c) => !occupiedBy(c));
-      a.pos = free ? { ...free } : null;
-    }
-    if (slot === 'support') {
-      a.pos = null;
-      if (state.selected === charId) state.selected = null;
-    }
+    const cell = slot === 'frontline' && !me.pos ? freeCell() : me.pos;
+    updateMember(key, (o) => {
+      o.slot = slot;
+      o.pos = slot === 'frontline' ? cell : null;
+    });
+    if (slot === 'support' && state.selected === key) state.selected = null;
   }
   state.message = '';
   render();
@@ -582,26 +752,35 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.sheets.length > 0) closeTopSheet();
 });
 
-function startBattle(): void {
+// --- 戦闘 ---
+
+function startBattle(context: BattleContext = 'sandbox', encounterId?: string): void {
   const err = validateLoadout();
   if (err) {
     state.message = err;
+    state.runMessage = err;
     render();
     return;
   }
-  const setup = buildBattleSetup(currentLoadout(), getEncounter(state.encounterId), {
-    seed: state.seed,
-    config: DEFAULT_CONFIG,
-    logging: true,
-  });
+  const run = state.run;
+  const setup = buildBattleSetup(
+    currentLoadout(),
+    getEncounter(encounterId ?? activeEncounterId()),
+    {
+      seed: `${state.seed}::${run ? `${run.chapter}-${run.nodeIndex}-${run.bossRetries}` : 'sandbox'}`,
+      config: DEFAULT_CONFIG,
+      logging: true,
+    },
+  );
   state.replay = buildReplay(setup);
+  state.battleContext = context;
+  state.pendingResult = context !== 'sandbox';
   state.frame = 0;
   state.playing = true;
   state.selected = null;
   state.sheets.length = 0;
   state.resumeAfterSheet = false;
   state.message = '';
-  // 戦闘中は「編成」「加護」を触れないので、操作タブへ移す
   state.tab = 'control';
   render();
 }
@@ -612,7 +791,70 @@ function backToSetup(): void {
   state.frame = 0;
   state.sheets.length = 0;
   state.resumeAfterSheet = false;
-  state.tab = 'team';
+  state.pendingResult = false;
+  state.tab = state.run ? 'run' : 'team';
+  render();
+}
+
+/** 戦闘の結果をラン側に反映する */
+function applyRunBattleResult(): void {
+  const run = state.run;
+  const rep = state.replay;
+  if (!run || !rep) return;
+  const won = rep.outcome === 'win';
+  if (state.battleContext === 'runEvent') {
+    const out = resolveEventBattle(run, won, runCfg);
+    state.runMessage = `${out.text} ${out.changes.join(' / ')}`;
+  } else {
+    const res = applyBattleResult(run, won, runCfg);
+    state.runMessage = won
+      ? `勝利。コイン +${res.coinsGained}`
+      : res.gameOver
+        ? 'ライフが尽きた……'
+        : res.bossRetry
+          ? '敗北。ライフ -1。章ボスに再挑戦できる'
+          : `敗北。ライフ -1・救援コイン +${res.coinsGained}`;
+  }
+  autoSave();
+  state.pendingResult = false;
+  backToSetup();
+}
+
+// ---------------------------------------------------------------------------
+// ラン（セーブ）
+// ---------------------------------------------------------------------------
+
+function autoSave(): void {
+  if (state.run) saveRun(state.run);
+}
+
+function startRun(): void {
+  state.run = createRun(state.seed, runCfg);
+  state.savedRun = null;
+  state.cardIndex = 0;
+  state.runMessage = 'ランを始めた。';
+  autoSave();
+  state.tab = 'run';
+  render();
+}
+
+function resumeRun(r: RunState): void {
+  state.run = r;
+  state.savedRun = null;
+  state.cardIndex = 0;
+  state.seed = r.seed;
+  state.runMessage = 'ランを再開した。';
+  state.tab = 'run';
+  render();
+}
+
+function abandonRun(): void {
+  state.run = null;
+  state.savedRun = null;
+  clearRun();
+  state.cardIndex = 0;
+  state.runMessage = 'ランをやめた。';
+  state.tab = 'run';
   render();
 }
 
@@ -692,28 +934,26 @@ function debuffRow(debuffs: Record<DebuffKind, number>): string {
   return parts.length > 0 ? parts.join('・') : 'なし';
 }
 
+function memberStats(m: Member): Stats {
+  return resolveMembers({
+    frontline: [
+      {
+        charId: m.charId,
+        star: m.star,
+        equipment: m.equipment.filter((x) => x !== ''),
+        pos: { x: 2, y: 3 },
+      },
+    ],
+    support: [],
+    blessings: [],
+  })[0]!.stats;
+}
+
 function buildDetailView(target: DetailTarget): DetailView | null {
-  if (target.kind === 'char') {
-    const c = getCharacter(target.charId);
-    const a = state.assign.get(c.id)!;
-    let stats: Stats;
-    const members = a.slot === 'none' ? [] : resolveMembers(currentLoadout());
-    const m = members.find((x) => x.entry.charId === c.id);
-    if (m) stats = m.stats;
-    else {
-      stats = resolveMembers({
-        frontline: [
-          {
-            charId: c.id,
-            star: a.star,
-            equipment: slotsOf(a).filter((x) => x !== ''),
-            pos: { x: 2, y: 3 },
-          },
-        ],
-        support: [],
-        blessings: [],
-      })[0]!.stats;
-    }
+  if (target.kind === 'member') {
+    const m = memberOf(target.key);
+    if (!m) return null;
+    const c = getCharacter(m.charId);
     return {
       title: c.name,
       id: c.id,
@@ -721,17 +961,17 @@ function buildDetailView(target: DetailTarget): DetailView | null {
         { text: ROLE_LABEL[c.role] },
         { text: ELEMENT_LABEL[c.element], cls: `el-${c.element}` },
         { text: MYTH_LABEL[c.myth] },
-        { text: `★${a.star}` },
-        { text: a.slot === 'frontline' ? '前衛' : a.slot === 'support' ? 'サポート' : '未編成' },
+        { text: `★${m.star}` },
+        { text: m.slot === 'frontline' ? '前衛' : m.slot === 'support' ? 'サポート' : '未編成' },
       ],
-      rows: statRows(stats, null, null),
-      equipment: slotsOf(a),
+      rows: statRows(memberStats(m), null, null),
+      equipment: m.equipment,
       skills: charSkills(c),
     };
   }
 
   if (target.kind === 'enemySlot') {
-    const units = getEncounter(state.encounterId).units;
+    const units = getEncounter(activeEncounterId()).units;
     const eu = units[target.index];
     if (!eu) return null;
     const def = getEnemy(eu.enemyId);
@@ -762,7 +1002,6 @@ function buildDetailView(target: DetailTarget): DetailView | null {
 
   const c = charOf(u.defId);
   const e = c ? null : enemyOf(u.defId);
-  const a = c ? state.assign.get(c.id) : null;
 
   return {
     title: `${u.name}${u.dupIndex ? ` ${u.dupIndex}` : ''}`,
@@ -780,7 +1019,7 @@ function buildDetailView(target: DetailTarget): DetailView | null {
       ...(uf.shield > 0 ? ([['シールド', formatNumber(uf.shield)]] as [string, string][]) : []),
       ['デバフ', debuffRow(uf.debuffs)],
     ],
-    equipment: a ? slotsOf(a) : [],
+    equipment: [],
     skills: c ? charSkills(c) : e ? enemySkills(e) : [],
   };
 }
@@ -836,102 +1075,168 @@ function btn(label: string, on: boolean, fn: () => void, cls = ''): HTMLButtonEl
 }
 
 // ---------------------------------------------------------------------------
-// 「編成」タブ
+// 「編成」タブ（1体ずつのカード表示）
 // ---------------------------------------------------------------------------
 
+/** いま下部バーに出ているメンバー */
+export function currentCardMember(): Member | null {
+  const list = party();
+  if (list.length === 0) return null;
+  const i = ((state.cardIndex % list.length) + list.length) % list.length;
+  return list[i]!;
+}
+
+function pageBy(delta: number): void {
+  const n = party().length;
+  if (n === 0) return;
+  state.cardIndex = (((state.cardIndex + delta) % n) + n) % n;
+  state.message = '';
+  render();
+}
+
+function slotLabel(m: Member): string {
+  if (m.slot === 'frontline') return m.pos ? `前衛（${m.pos.x},${m.pos.y}）` : '前衛（未配置）';
+  if (m.slot === 'support') return 'サポート配置中（盤面には配置されません）';
+  return '未配置';
+}
+
 function renderTeamTab(body: HTMLElement): void {
+  const list = party();
+  const lim = slotLimits();
   body.appendChild(
     h(
       'div',
-      'hint',
+      'team-summary',
+      `前衛 ${countSlot('frontline')}/${lim.frontline}・サポート ${countSlot('support')}/${lim.support}`,
+    ),
+  );
+  body.appendChild(
+    h(
+      'div',
+      'hint' + (validateLoadout() ? ' err' : ''),
       state.message ||
         validateLoadout() ||
-        (state.selected
-          ? `${getCharacter(state.selected).name} を置くマスを盤面でタップ`
-          : `前衛 ${countSlot('frontline')}/${team.frontlineSlotsDefault}・サポート ${countSlot('support')}/${team.supportSlotsDefault}`),
+        (state.selected ? '盤面のマスをタップして配置' : 'カードを送ってキャラを選ぶ'),
     ),
   );
 
-  const list = h('div', 'char-list');
-  for (const c of CHARACTERS) {
-    const a = state.assign.get(c.id)!;
-    const card = h(
-      'div',
-      ['char', `slot-${a.slot}`, state.selected === c.id ? 'selected' : ''].filter(Boolean).join(' '),
-    );
-
-    const head = h('div', 'char-head');
-    const name = h('div', 'char-name', c.name);
-    name.addEventListener('click', () => {
-      if (a.slot === 'frontline') {
-        // 前衛カードをタップ → 盤面で置く場所を選ぶモード
-        state.selected = state.selected === c.id ? null : c.id;
-        state.message = state.selected ? '盤面のマスをタップして配置' : '';
-      } else {
-        openSheet({ kind: 'detail', target: { kind: 'char', charId: c.id } });
-      }
-      render();
-    });
-    head.appendChild(name);
-    card.appendChild(head);
-
-    const tags = h('div', 'char-tags');
-    tags.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
-    tags.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
-    card.appendChild(tags);
-
-    card.appendChild(h('div', 'char-id', c.id));
-
-    const sub = h('div', 'char-sub');
-    sub.appendChild(btn('前衛', a.slot === 'frontline', () => setSlot(c.id, 'frontline')));
-    sub.appendChild(btn('サポート', a.slot === 'support', () => setSlot(c.id, 'support')));
-
-    const starSel = document.createElement('select');
-    for (const s of [1, 2, 3]) {
-      const o = document.createElement('option');
-      o.value = String(s);
-      o.textContent = `★${s}`;
-      if (a.star === s) o.selected = true;
-      starSel.appendChild(o);
-    }
-    starSel.addEventListener('change', () => {
-      // ★が上がってもすでに着けている装備はそのまま残す
-      a.star = Number(starSel.value) as Star;
-      render();
-    });
-    sub.appendChild(starSel);
-
-    sub.appendChild(
-      btn(`装備 ${equippedCount(a)}/${equipmentSlots(a.star)}`, equippedCount(a) > 0, () =>
-        openSheet({ kind: 'equip', charId: c.id, slot: firstOpenSlot(a) }),
-      ),
-    );
-    sub.appendChild(
-      btn('詳細', false, () => openSheet({ kind: 'detail', target: { kind: 'char', charId: c.id } })),
-    );
-    card.appendChild(sub);
-
-    if (a.slot === 'frontline' && a.pos) {
-      card.appendChild(h('div', 'stat', `位置 (${a.pos.x},${a.pos.y})`));
-    }
-    list.appendChild(card);
+  const m = currentCardMember();
+  if (!m) {
+    body.appendChild(h('div', 'hint', '所持しているキャラがいません'));
+    return;
   }
-  body.appendChild(list);
-}
+  const c = getCharacter(m.charId);
+  const stats = memberStats(m);
 
-function firstOpenSlot(a: Assignment): number {
-  const s = slotsOf(a);
-  const i = s.findIndex((x) => x === '');
-  return i < 0 ? 0 : i;
+  const pager = h('div', 'char-pager');
+  pager.appendChild(btn('◀', false, () => pageBy(-1), 'pager-prev'));
+
+  const card = h(
+    'div',
+    ['char', `slot-${m.slot}`, state.selected === m.key ? 'selected' : ''].filter(Boolean).join(' '),
+  );
+
+  const head = h('div', 'char-head');
+  head.appendChild(h('div', 'char-name', c.name));
+  head.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
+  head.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
+  card.appendChild(head);
+
+  const idRow = h('div', 'char-idrow');
+  idRow.appendChild(h('span', 'char-id', c.id));
+  const starSel = document.createElement('select');
+  for (const s of [1, 2, 3]) {
+    const o = document.createElement('option');
+    o.value = String(s);
+    o.textContent = `★${s}`;
+    if (m.star === s) o.selected = true;
+    starSel.appendChild(o);
+  }
+  starSel.addEventListener('change', () => {
+    // ★が上がってもすでに着けている装備はそのまま残す
+    updateMember(m.key, (o) => (o.star = Number(starSel.value) as Star));
+    render();
+  });
+  idRow.appendChild(starSel);
+  card.appendChild(idRow);
+
+  card.appendChild(h('div', `char-slot-state state-${m.slot}`, slotLabel(m)));
+
+  const quick = h('div', 'char-quick');
+  for (const [k, v] of [
+    ['HP', formatNumber(stats.maxHp)],
+    ['攻', formatNumber(stats.atk)],
+    ['防', formatNumber(stats.def)],
+    ['射', formatNumber(stats.range)],
+  ] as [string, string][]) {
+    const cell = h('span', 'quick-cell');
+    cell.appendChild(h('span', 'quick-k', k));
+    cell.appendChild(h('span', 'quick-v', v));
+    quick.appendChild(cell);
+  }
+  card.appendChild(quick);
+
+  const skills = h('div', 'char-skills');
+  for (const [mark, label] of [
+    ['A', 'アクティブ'],
+    ['P', 'パッシブ'],
+    ['S', 'サポート効果'],
+  ] as [string, string][]) {
+    const b = btn(mark, false, () =>
+      openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } }),
+    );
+    b.classList.add('skill-icon');
+    b.title = label;
+    skills.appendChild(b);
+  }
+  m.equipment.forEach((id, i) => {
+    const b = btn(id ? getEquipment(id).name.slice(0, 2) : '＋', id !== '', () =>
+      openSheet({ kind: 'equip', key: m.key, slot: i }),
+    );
+    b.classList.add('equip-chip');
+    b.title = `装備スロット ${i + 1}`;
+    skills.appendChild(b);
+  });
+  card.appendChild(skills);
+
+  const sub = h('div', 'char-sub');
+  sub.appendChild(btn('前衛', m.slot === 'frontline', () => setSlot(m.key, 'frontline')));
+  sub.appendChild(btn('サポート', m.slot === 'support', () => setSlot(m.key, 'support')));
+  sub.appendChild(
+    btn(state.selected === m.key ? '配置中止' : '配置', state.selected === m.key, () => {
+      if (m.slot !== 'frontline') {
+        state.message = '前衛にしてから配置してください';
+        render();
+        return;
+      }
+      state.selected = state.selected === m.key ? null : m.key;
+      state.message = state.selected ? '盤面のマスをタップして配置' : '';
+      render();
+    }),
+  );
+  sub.appendChild(
+    btn('詳細', false, () => openSheet({ kind: 'detail', target: { kind: 'member', key: m.key } })),
+  );
+  card.appendChild(sub);
+
+  pager.appendChild(card);
+  pager.appendChild(btn('▶', false, () => pageBy(1), 'pager-next'));
+  body.appendChild(pager);
+
+  body.appendChild(h('div', 'char-page-indicator', `${state.cardIndex + 1} / ${list.length}`));
 }
 
 // ---------------------------------------------------------------------------
 // 「加護」タブ
 // ---------------------------------------------------------------------------
 
+function ownedBlessings(): string[] {
+  return state.run ? state.run.blessings : [...state.blessings];
+}
+
 function blessingRow(id: string, withToggle: boolean): HTMLElement {
-  const b = BLESSINGS.find((x) => x.id === id)!;
-  const owned = state.blessings.has(b.id);
+  const b = getBlessing(id);
+  const owned = ownedBlessings().includes(b.id);
   const row = h('div', 'blessing-row' + (owned ? ' owned' : ''));
   const col = h('div', 'blessing-main');
   const head = h('div', 'blessing-head');
@@ -943,7 +1248,13 @@ function blessingRow(id: string, withToggle: boolean): HTMLElement {
   if (withToggle) {
     row.appendChild(
       btn(owned ? '所持' : '入手', owned, () => {
-        if (owned) state.blessings.delete(b.id);
+        if (state.run) {
+          // ラン中はショップ／イベントからしか手に入らない
+          state.message = 'ラン中の加護は、ショップとイベントから手に入ります';
+          render();
+          return;
+        }
+        if (state.blessings.has(b.id)) state.blessings.delete(b.id);
         else state.blessings.add(b.id);
         render();
       }),
@@ -956,13 +1267,204 @@ function blessingRow(id: string, withToggle: boolean): HTMLElement {
 }
 
 function renderBlessingTab(body: HTMLElement): void {
-  body.appendChild(h('div', 'hint', `所持 ${state.blessings.size} / ${BLESSINGS.length}`));
+  const owned = ownedBlessings();
+  body.appendChild(h('div', 'hint', `所持 ${owned.length} / ${BLESSINGS.length}`));
   const section = h('div', 'blessings');
   const sorted = [...BLESSINGS].sort(
-    (a, b) => (state.blessings.has(a.id) ? 0 : 1) - (state.blessings.has(b.id) ? 0 : 1),
+    (a, b) => (owned.includes(a.id) ? 0 : 1) - (owned.includes(b.id) ? 0 : 1),
   );
   for (const b of sorted) section.appendChild(blessingRow(b.id, true));
   body.appendChild(section);
+}
+
+// ---------------------------------------------------------------------------
+// 「ラン」タブ
+// ---------------------------------------------------------------------------
+
+function shopItemLabel(item: ShopItem): { name: string; desc: string } {
+  switch (item.kind) {
+    case 'character': {
+      const c = getCharacter(item.charId);
+      return { name: c.name, desc: `${ROLE_LABEL[c.role]}・${ELEMENT_LABEL[c.element]}` };
+    }
+    case 'blessing': {
+      const b = getBlessing(item.blessingId);
+      return { name: b.name, desc: `${RARITY_LABEL[b.rarity]}｜${b.desc}` };
+    }
+    case 'equipment': {
+      const e = getEquipment(item.equipmentId);
+      return { name: e.name, desc: e.desc };
+    }
+    case 'sixthSlot':
+      return { name: '6体目枠', desc: 'サポート枠がひとつ増える' };
+    case 'promotion':
+      return { name: '昇格', desc: 'サポート枠がひとつ前衛枠になる' };
+  }
+}
+
+function renderShopNode(body: HTMLElement, run: RunState): void {
+  const shop = run.shop!;
+  body.appendChild(
+    h('div', 'hint', shop.boss ? 'ボスショップ（高価だが上物がそろう）' : 'リザルト兼ショップ'),
+  );
+  const list = h('div', 'shop-list');
+  shop.items.forEach((slot, i) => {
+    const { name, desc } = shopItemLabel(slot.item);
+    const row = h('div', 'shop-row' + (slot.sold ? ' sold' : ''));
+    const col = h('div', 'shop-main');
+    col.appendChild(h('div', 'shop-name', name));
+    col.appendChild(h('div', 'shop-desc', desc));
+    row.appendChild(col);
+    const b = btn(slot.sold ? '売切' : `${slot.item.price}c`, false, () => {
+      if (buyShopItem(run, i, runCfg)) {
+        state.runMessage = `${name} を購入`;
+        autoSave();
+      } else {
+        state.runMessage = 'コインが足りないか、もう買えません';
+      }
+      render();
+    });
+    b.disabled = slot.sold || run.coins < slot.item.price;
+    row.appendChild(b);
+    list.appendChild(row);
+  });
+  body.appendChild(list);
+
+  const row = h('div', 'row');
+  const rb = btn(`リロール ${shop.rerollCost}c`, false, () => {
+    if (rerollShop(run, runCfg)) {
+      state.runMessage = '品を引き直した';
+      autoSave();
+    } else state.runMessage = 'コインが足りません';
+    render();
+  });
+  rb.disabled = run.coins < shop.rerollCost;
+  row.appendChild(rb);
+  row.appendChild(
+    btn('次へ進む', true, () => {
+      advanceNode(run, runCfg);
+      state.runMessage = '';
+      autoSave();
+      render();
+    }),
+  );
+  body.appendChild(row);
+}
+
+function renderEventNode(body: HTMLElement, run: RunState): void {
+  const def = getEvent(run.eventId!);
+  const pending = Boolean(run.lastEvent?.battleEncounterId);
+  body.appendChild(h('div', 'event-title', def.name));
+  body.appendChild(h('div', 'event-text', def.text));
+
+  if (pending) {
+    body.appendChild(h('div', 'hint', 'ミニ戦闘に挑む'));
+    body.appendChild(
+      btn('▶ ミニ戦闘へ', true, () => startBattle('runEvent', run.lastEvent!.battleEncounterId!)),
+    );
+    return;
+  }
+
+  def.choices.forEach((c, i) => {
+    const row = h('div', 'shop-row');
+    const col = h('div', 'shop-main');
+    col.appendChild(h('div', 'shop-name', c.label));
+    col.appendChild(
+      h(
+        'div',
+        'shop-desc',
+        c.safe
+          ? '安全'
+          : c.battle
+            ? 'ミニ戦闘'
+            : `賭け（成功 ${Math.round((c.gamble?.chance ?? 0) * 100)}%）`,
+      ),
+    );
+    row.appendChild(col);
+    row.appendChild(
+      btn('選ぶ', false, () => {
+        const out = chooseEvent(run, i as 0 | 1, runCfg);
+        state.runMessage = out.battleEncounterId
+          ? 'ミニ戦闘に挑む'
+          : `${out.text} ${out.changes.join(' / ')}`;
+        autoSave();
+        render();
+      }),
+    );
+    body.appendChild(row);
+  });
+}
+
+function renderRunTab(body: HTMLElement): void {
+  const run = state.run;
+
+  if (!run) {
+    if (state.savedRun) {
+      const s = state.savedRun;
+      body.appendChild(h('div', 'hint', '保存されたランがあります。再開しますか？'));
+      body.appendChild(
+        h('div', 'run-status', `${s.chapter}章 / ライフ ${s.life} / コイン ${s.coins}`),
+      );
+      const row = h('div', 'row');
+      row.appendChild(btn('再開する', true, () => resumeRun(s)));
+      row.appendChild(btn('破棄して新規', false, abandonRun));
+      body.appendChild(row);
+      return;
+    }
+    body.appendChild(
+      h('div', 'hint', 'ランを始めると、章の進行（戦闘→ショップ→イベント）が動きます'),
+    );
+    body.appendChild(btn('▶ 新しいランを始める', true, startRun));
+    if (state.runMessage) body.appendChild(h('div', 'hint', state.runMessage));
+    return;
+  }
+
+  body.appendChild(
+    h(
+      'div',
+      'run-status',
+      `${run.chapter}章 ／ ♥ ${run.life} ／ ${run.coins}c ／ 前衛${run.frontlineSlots}・サポ${run.supportSlots}`,
+    ),
+  );
+  if (state.runMessage) body.appendChild(h('div', 'hint', state.runMessage));
+
+  if (run.phase === 'clear') {
+    body.appendChild(h('div', 'result win', 'クリア！'));
+    body.appendChild(btn('新しいランを始める', true, startRun));
+    return;
+  }
+  if (run.phase === 'gameover') {
+    body.appendChild(h('div', 'result lose', 'ゲームオーバー'));
+    body.appendChild(btn('新しいランを始める', true, startRun));
+    return;
+  }
+
+  const map = h('div', 'run-map');
+  for (const n of progressMap(run, runCfg)) {
+    map.appendChild(
+      h('span', 'run-node' + (n.done ? ' done' : '') + (n.current ? ' current' : ''), n.label),
+    );
+  }
+  body.appendChild(map);
+
+  const node = currentNode(run, runCfg)!;
+  body.appendChild(h('div', 'hint', `いまのノード: ${NODE_LABEL[node.kind]}`));
+
+  if (node.kind === 'battle' || node.kind === 'boss') {
+    if (run.bossRetries > 0) {
+      body.appendChild(h('div', 'hint err', `章ボスに再挑戦（${run.bossRetries}回目）`));
+    }
+    body.appendChild(h('div', 'hint', '「編成」タブで配置を整えてから挑む'));
+    body.appendChild(btn('▶ この戦闘に挑む', true, () => startBattle('runNode')));
+  } else if (node.kind === 'shop' || node.kind === 'bossShop') {
+    renderShopNode(body, run);
+  } else if (node.kind === 'event') {
+    renderEventNode(body, run);
+  }
+
+  const foot = h('div', 'row');
+  foot.appendChild(btn('ランをやめる', false, abandonRun));
+  body.appendChild(foot);
 }
 
 // ---------------------------------------------------------------------------
@@ -972,7 +1474,6 @@ function renderBlessingTab(body: HTMLElement): void {
 function renderControlTab(body: HTMLElement): void {
   const rep = state.replay;
 
-  // 倍速とスキップ（戦闘中も操作できる）
   body.appendChild(h('div', 'hint', '再生'));
   const play = h('div', 'row');
   for (const s of [1, 2, 4] as const) {
@@ -983,43 +1484,36 @@ function renderControlTab(body: HTMLElement): void {
       }),
     );
   }
-  play.appendChild(
-    btn(
-      '⏭ スキップ',
-      false,
-      () => {
-        if (!rep) return;
-        state.frame = rep.frames.length - 1;
-        state.playing = false;
-        state.resumeAfterSheet = false;
-        render();
-      },
-      rep ? '' : 'disabled-look',
-    ),
-  );
-  if (!rep) (play.lastChild as HTMLButtonElement).disabled = true;
+  const skip = btn('⏭ スキップ', false, () => {
+    if (!rep) return;
+    state.frame = rep.frames.length - 1;
+    state.playing = false;
+    state.resumeAfterSheet = false;
+    render();
+  });
+  skip.disabled = !rep;
+  play.appendChild(skip);
   body.appendChild(play);
 
-  // 遭遇とシード（準備中のみ変更できる）
   body.appendChild(h('div', 'hint', '遭遇'));
   const encRow = h('div', 'row');
   for (const e of ENCOUNTERS) {
-    const b = btn(e.id, state.encounterId === e.id, () => {
+    const b = btn(e.id, activeEncounterId() === e.id, () => {
       state.encounterId = e.id;
       state.sheets.length = 0;
       render();
     });
-    if (rep) b.disabled = true;
+    if (rep || inRun()) b.disabled = true;
     encRow.appendChild(b);
   }
   body.appendChild(encRow);
-  body.appendChild(h('div', 'hint', getEncounter(state.encounterId).name));
+  body.appendChild(h('div', 'hint', getEncounter(activeEncounterId()).name));
 
   body.appendChild(h('div', 'hint', 'シード'));
   const seedInput = document.createElement('input');
   seedInput.type = 'text';
   seedInput.value = state.seed;
-  seedInput.disabled = rep !== null;
+  seedInput.disabled = rep !== null || inRun();
   seedInput.addEventListener('input', () => {
     state.seed = seedInput.value;
   });
@@ -1027,7 +1521,6 @@ function renderControlTab(body: HTMLElement): void {
 
   if (!rep) return;
 
-  // 戦闘中は、結果・ユニット・ログもここで見る
   const frame = rep.frames[Math.min(state.frame, rep.frames.length - 1)]!;
   const atEnd = state.frame >= rep.frames.length - 1;
   if (atEnd) {
@@ -1093,14 +1586,18 @@ function renderBottomBar(root: HTMLElement): void {
   const bar = h('div', 'bottom-bar');
   const inBattle = state.replay !== null;
 
-  // タブ（戦闘中は「編成」「加護」を触れない）
   const tabRow = h('div', 'tab-row');
   for (const t of TABS) {
     const disabled = inBattle && t.id !== 'control';
-    const b = btn(t.label, state.tab === t.id, () => {
-      state.tab = t.id;
-      render();
-    }, 'tab');
+    const b = btn(
+      t.label,
+      state.tab === t.id,
+      () => {
+        state.tab = t.id;
+        render();
+      },
+      'tab',
+    );
     b.disabled = disabled;
     b.setAttribute('data-tab', t.id);
     tabRow.appendChild(b);
@@ -1110,30 +1607,39 @@ function renderBottomBar(root: HTMLElement): void {
   const body = h('div', 'tab-body');
   if (state.tab === 'team') renderTeamTab(body);
   else if (state.tab === 'blessing') renderBlessingTab(body);
+  else if (state.tab === 'run') renderRunTab(body);
   else renderControlTab(body);
   bar.appendChild(body);
 
-  // 実行ボタン（タブに関わらず常に見える）
   const action = h('div', 'action-row');
   if (!inBattle) {
-    action.appendChild(btn('▶ 戦闘開始', true, startBattle, 'wide'));
+    const node = state.run && state.run.phase === 'node' ? currentNode(state.run, runCfg) : null;
+    if (node && (node.kind === 'battle' || node.kind === 'boss')) {
+      action.appendChild(btn('▶ この戦闘に挑む', true, () => startBattle('runNode'), 'wide'));
+    } else {
+      action.appendChild(btn('▶ 戦闘開始', true, () => startBattle('sandbox'), 'wide'));
+    }
   } else {
     const rep = state.replay!;
     const atEnd = state.frame >= rep.frames.length - 1;
-    action.appendChild(btn('← 編成に戻る', false, backToSetup));
-    action.appendChild(
-      btn(
-        state.playing ? '⏸ 一時停止' : '▶ 再生',
-        state.playing,
-        () => {
-          if (atEnd) state.frame = 0;
-          state.playing = !state.playing;
-          state.resumeAfterSheet = false;
-          render();
-        },
-        'wide',
-      ),
-    );
+    if (state.pendingResult && atEnd) {
+      action.appendChild(btn('結果を反映して進む', true, applyRunBattleResult, 'wide'));
+    } else {
+      action.appendChild(btn('← 編成に戻る', false, backToSetup));
+      action.appendChild(
+        btn(
+          state.playing ? '⏸ 一時停止' : '▶ 再生',
+          state.playing,
+          () => {
+            if (atEnd) state.frame = 0;
+            state.playing = !state.playing;
+            state.resumeAfterSheet = false;
+            render();
+          },
+          'wide',
+        ),
+      );
+    }
   }
   bar.appendChild(action);
 
@@ -1141,31 +1647,51 @@ function renderBottomBar(root: HTMLElement): void {
 }
 
 // ---------------------------------------------------------------------------
-// シート
+// シート（重ねて開くスタック）
 // ---------------------------------------------------------------------------
 
-function sheetShell(title: string, small = false): { wrap: DocumentFragment; body: HTMLElement } {
+/**
+ * シート1枚の外枠。スタックの深さ（depth）と、最前面かどうか（isTop）で挙動を変える。
+ * 背面のシートは操作できない（pointer-events: none）。
+ */
+function sheetShell(
+  title: string,
+  opts: { small?: boolean; depth: number; isTop: boolean },
+): { wrap: DocumentFragment; body: HTMLElement } {
+  const { small = false, depth, isTop } = opts;
+  const z = 40 + depth * 2;
+
   const wrap = document.createDocumentFragment();
-  const backdrop = h('div', 'sheet-backdrop');
-  backdrop.addEventListener('click', closeTopSheet);
+  const backdrop = h('div', 'sheet-backdrop' + (isTop ? '' : ' behind'));
+  backdrop.style.zIndex = String(z);
+  if (isTop) backdrop.addEventListener('click', closeTopSheet);
   wrap.appendChild(backdrop);
 
-  const sheet = h('div', 'sheet' + (small ? ' small' : ''));
+  const sheet = h('div', 'sheet' + (small ? ' small' : '') + (isTop ? '' : ' behind'));
+  sheet.style.zIndex = String(z + 1);
+  sheet.dataset.depth = String(depth);
   const head = h('div', 'sheet-head');
   head.appendChild(h('div', 'sheet-title', title));
-  head.appendChild(btn('✕', false, closeTopSheet, 'sheet-close'));
+  const close = btn('✕', false, closeTopSheet, 'sheet-close');
+  close.disabled = !isTop;
+  head.appendChild(close);
   sheet.appendChild(head);
   wrap.appendChild(sheet);
   return { wrap, body: sheet };
 }
 
-function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
+function renderDetailSheet(
+  root: HTMLElement,
+  target: DetailTarget,
+  depth: number,
+  isTop: boolean,
+): void {
   const view = buildDetailView(target);
   if (!view) {
     state.sheets.pop();
     return;
   }
-  const { wrap, body } = sheetShell(view.title);
+  const { wrap, body } = sheetShell(view.title, { depth, isTop });
   body.classList.add('detail');
   body.querySelector('.sheet-title')!.classList.add('detail-title');
 
@@ -1182,7 +1708,6 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
   }
   body.appendChild(grid);
 
-  // 装備（スロット数ぶん並べる）
   if (view.equipment.length === 0) {
     const row = h('div', 'equip-row');
     row.appendChild(h('span', 'equip-label', '装備'));
@@ -1203,11 +1728,11 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
     });
   }
 
-  // チーム全体（所持中の加護）
   const teamRow = h('div', 'skill team-row');
   teamRow.appendChild(h('span', 'skill-label', 'チーム全体'));
+  const owned = ownedBlessings();
   teamRow.appendChild(
-    h('span', 'skill-name', state.blessings.size > 0 ? `加護 ${state.blessings.size} 個` : '加護なし'),
+    h('span', 'skill-name', owned.length > 0 ? `加護 ${owned.length} 個` : '加護なし'),
   );
   teamRow.appendChild(btn('一覧', false, () => openSheet({ kind: 'blessings' })));
   body.appendChild(teamRow);
@@ -1227,31 +1752,42 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
   root.appendChild(wrap);
 }
 
-function renderEquipSheet(root: HTMLElement, charId: string, slot: number): void {
-  const c = getCharacter(charId);
-  const a = state.assign.get(charId)!;
-  const slots = slotsOf(a);
+function renderEquipSheet(
+  root: HTMLElement,
+  key: string,
+  slot: number,
+  depth: number,
+  isTop: boolean,
+): void {
+  const m = memberOf(key);
+  if (!m) {
+    state.sheets.pop();
+    return;
+  }
+  const c = getCharacter(m.charId);
+  const slots = m.equipment;
   const cur = Math.min(Math.max(0, slot), slots.length - 1);
-  const { wrap, body } = sheetShell(`${c.name} の装備`);
+  const { wrap, body } = sheetShell(`${c.name} の装備`, { depth, isTop });
   body.classList.add('equip');
 
-  // スロットを★の数だけ横並びで表示
   const slotRow = h('div', 'equip-slots');
   slots.forEach((id, i) => {
     const label = id ? getEquipment(id).name : '装備なし';
-    const b = btn(`${i + 1}. ${label}`, i === cur, () =>
-      replaceSheet({ kind: 'equip', charId, slot: i }),
-    );
+    const b = btn(`${i + 1}. ${label}`, i === cur, () => replaceSheet({ kind: 'equip', key, slot: i }));
     b.classList.add('equip-slot');
     slotRow.appendChild(b);
   });
   body.appendChild(slotRow);
-  body.appendChild(h('div', 'hint', `スロット ${cur + 1} に着ける装備を選ぶ（★${a.star} → ${slots.length}枠）`));
+  body.appendChild(
+    h('div', 'hint', `スロット ${cur + 1} に着ける装備を選ぶ（★${m.star} → ${slots.length}枠）`),
+  );
 
   const choose = (id: string): void => {
-    const next = slotsOf(a);
-    next[cur] = id;
-    a.equipment = next;
+    updateMember(key, (o) => {
+      const next = padSlots(o.equipment, o.star);
+      next[cur] = id;
+      o.equipment = next;
+    });
     closeTopSheet();
   };
 
@@ -1260,7 +1796,12 @@ function renderEquipSheet(root: HTMLElement, charId: string, slot: number): void
   none.addEventListener('click', () => choose(''));
   body.appendChild(none);
 
-  for (const e of EQUIPMENT) {
+  // ラン中は所持している装備だけ選べる
+  const run = state.run;
+  const pool = run
+    ? EQUIPMENT.filter((e) => run.inventory.includes(e.id) || slots.includes(e.id))
+    : EQUIPMENT;
+  for (const e of pool) {
     const item = h('button', 'sheet-list-item' + (slots[cur] === e.id ? ' on' : ''));
     const col = h('div');
     col.appendChild(h('div', 'li-name', e.name));
@@ -1269,31 +1810,40 @@ function renderEquipSheet(root: HTMLElement, charId: string, slot: number): void
     item.addEventListener('click', () => choose(e.id));
     body.appendChild(item);
   }
+  if (pool.length === 0) body.appendChild(h('div', 'hint', '持っている装備がありません'));
   root.appendChild(wrap);
 }
 
-function renderBlessingsSheet(root: HTMLElement): void {
-  const { wrap, body } = sheetShell('チーム全体の加護');
+function renderBlessingsSheet(root: HTMLElement, depth: number, isTop: boolean): void {
+  const { wrap, body } = sheetShell('チーム全体の加護', { depth, isTop });
   body.classList.add('blessings');
-  const owned = BLESSINGS.filter((b) => state.blessings.has(b.id));
+  const owned = ownedBlessings();
   if (owned.length === 0) body.appendChild(h('div', 'hint', '加護をまだ持っていません'));
-  for (const b of owned) body.appendChild(blessingRow(b.id, false));
+  for (const id of owned) body.appendChild(blessingRow(id, false));
   root.appendChild(wrap);
 }
 
-function renderExplainSheet(root: HTMLElement, title: string, text: string): void {
-  const { wrap, body } = sheetShell(title, true);
+function renderExplainSheet(
+  root: HTMLElement,
+  title: string,
+  text: string,
+  depth: number,
+  isTop: boolean,
+): void {
+  const { wrap, body } = sheetShell(title, { small: true, depth, isTop });
   for (const line of text.split('\n')) body.appendChild(h('div', 'sheet-text', line));
   root.appendChild(wrap);
 }
 
+/** スタックを下から順にすべて描く。最前面のシートだけが操作できる */
 function renderSheets(root: HTMLElement): void {
-  const top = state.sheets[state.sheets.length - 1];
-  if (!top) return;
-  if (top.kind === 'detail') renderDetailSheet(root, top.target);
-  else if (top.kind === 'equip') renderEquipSheet(root, top.charId, top.slot);
-  else if (top.kind === 'blessings') renderBlessingsSheet(root);
-  else renderExplainSheet(root, top.title, top.text);
+  state.sheets.forEach((s, i) => {
+    const isTop = i === state.sheets.length - 1;
+    if (s.kind === 'detail') renderDetailSheet(root, s.target, i, isTop);
+    else if (s.kind === 'equip') renderEquipSheet(root, s.key, s.slot, i, isTop);
+    else if (s.kind === 'blessings') renderBlessingsSheet(root, i, isTop);
+    else renderExplainSheet(root, s.title, s.text, i, isTop);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1305,15 +1855,18 @@ function render(): void {
   root.textContent = '';
 
   const header = h('div', 'app-head');
-  header.appendChild(h('h1', undefined, 'Divine Pawns（仮題） 戦闘検証'));
+  header.appendChild(h('h1', undefined, 'Divine Pawns（仮題）'));
   const rep = state.replay;
+  const run = state.run;
   header.appendChild(
     h(
       'span',
       'stat',
       rep
-        ? `${state.encounterId} t=${rep.frames[Math.min(state.frame, rep.frames.length - 1)]!.t.toFixed(1)}s`
-        : `${state.encounterId} / ${state.seed}`,
+        ? `${activeEncounterId()} t=${rep.frames[Math.min(state.frame, rep.frames.length - 1)]!.t.toFixed(1)}s`
+        : run
+          ? `${run.chapter}章 ♥${run.life} ${run.coins}c`
+          : `${activeEncounterId()} / ${state.seed}`,
     ),
   );
   root.appendChild(header);
@@ -1325,5 +1878,9 @@ function render(): void {
   renderBottomBar(root);
   renderSheets(root);
 }
+
+// 保存されたランがあれば、再開するか聞く
+state.savedRun = loadRun();
+if (state.savedRun) state.tab = 'run';
 
 render();
