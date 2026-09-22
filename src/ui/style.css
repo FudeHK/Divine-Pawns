@@ -461,3 +461,56 @@ select {
   line-height: 1.7;
   margin: var(--gap) 0;
 }
+
+/* --- 加護の一覧 --- */
+
+.blessing-row {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: var(--gap);
+  margin-bottom: var(--gap);
+  background: var(--panel2);
+  min-height: var(--tap);
+}
+
+.blessing-row.owned {
+  border-color: var(--accent);
+}
+
+.blessing-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.blessing-head {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+}
+
+.blessing-name {
+  font-size: var(--font-body);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blessing-desc {
+  font-size: var(--font-sub);
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.rarity-common {
+  color: var(--muted);
+}
+.rarity-rare {
+  color: var(--ice);
+}
+.rarity-epic {
+  color: var(--accent);
+}

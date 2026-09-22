@@ -15,6 +15,7 @@ import type {
 
 export const zElement = z.enum(['fire', 'ice', 'wood', 'lightning']);
 export const zRole = z.enum(['tank', 'melee', 'ranged', 'mage', 'healer', 'support']);
+export const zRarity = z.enum(['common', 'rare', 'epic']);
 export const zMyth = z.enum(['greek', 'norse', 'japanese', 'egyptian']);
 export const zDebuffKind = z.enum(['burn', 'frostbite', 'poison', 'paralysis']);
 export const zStatKey = z.enum([
@@ -104,6 +105,12 @@ export const zGlobalModKey = z.enum([
   'poisonDurationAdd',
 ]);
 
+export const zUnitFilter = z.object({
+  element: zElement.optional(),
+  role: zRole.optional(),
+  myth: zMyth.optional(),
+});
+
 export const zEffect = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('damage'),
@@ -136,6 +143,7 @@ export const zEffect = z.discriminatedUnion('kind', [
     kind: z.literal('statMod'),
     target: zTargetSpec,
     radius: z.number().int().nonnegative().optional(),
+    filter: zUnitFilter.optional(),
     stat: zStatKey,
     mode: z.enum(['flat', 'pct']),
     value: z.number(),
@@ -225,7 +233,9 @@ export const zEquipmentDef: z.ZodType<EquipmentDef> = z.object({
 export const zBlessingDef: z.ZodType<BlessingDef> = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  desc: z.string(),
+  desc: z.string().min(1).max(40),
+  summary: z.string().min(1).max(40),
+  rarity: zRarity,
   buildMods: z.array(zBuildMod).optional(),
   effects: z.array(zEffectDef).optional(),
 }) as z.ZodType<BlessingDef>;

@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BLESSINGS, getBlessing } from '../src/data/blessings';
 import { CHARACTERS } from '../src/data/characters';
 import { getEncounter } from '../src/data/encounters';
 import { getEnemy } from '../src/data/enemies';
@@ -174,7 +175,7 @@ describe('詳細シート', () => {
     expect(body).toContain('★1');
 
     const labels = [...panel.querySelectorAll('.skill-label')].map((n) => n.textContent);
-    expect(labels).toEqual(['装備', 'アクティブ', 'パッシブ', 'サポート効果']);
+    expect(labels).toEqual(['装備', 'チーム全体', 'アクティブ', 'パッシブ', 'サポート効果']);
 
     closeSheet();
     expect(sheet()).toBeNull();
@@ -257,5 +258,116 @@ describe('キャラを選んでいる間の配置', () => {
     tap(findToken('青銅の')!);
     expect(sheet()).toBeNull();
     expect(findToken('霜の')).toBeTruthy();
+  });
+});
+
+describe('加護の表示', () => {
+  it('準備画面に加護セクションがあり、全加護が 名前・1行の説明・レア度 で並ぶ', () => {
+    const rows = [...app().querySelectorAll('.blessing-row')];
+    expect(rows.length).toBe(BLESSINGS.length);
+    for (const b of BLESSINGS) {
+      const row = rows.find((r) => r.querySelector('.blessing-name')?.textContent === b.name);
+      expect(row, b.id).toBeTruthy();
+      expect(row!.querySelector('.blessing-desc')?.textContent, b.id).toBe(b.desc);
+      expect(row!.querySelector('.tag')?.textContent, b.id).toBeTruthy();
+      expect(row!.querySelector('.tag')!.className, b.id).toContain(`rarity-${b.rarity}`);
+      expect([...row!.querySelectorAll('button')].some((x) => x.textContent === '説明'), b.id).toBe(
+        true,
+      );
+    }
+  });
+
+  it('加護の［説明］で summary がポップアップに出る', () => {
+    const row = [...app().querySelectorAll('.blessing-row')].find(
+      (r) => r.querySelector('.blessing-name')?.textContent === '嵐の加護',
+    )!;
+    ([...row.querySelectorAll('button')].find((b) => b.textContent === '説明') as HTMLButtonElement).click();
+    expect(sheetTitle()).toBe('嵐の加護');
+    const text = [...app().querySelectorAll('.sheet-text')].map((n) => n.textContent).join('\n');
+    expect(text).toBe(getBlessing('bl_storm').summary);
+  });
+
+  it('詳細シートの一覧に「チーム全体」があり、開くと加護がすべて並ぶ', () => {
+    // 加護を2つ所持させる
+    for (const id of ['bl_storm', 'bl_inferno']) {
+      const row = [...app().querySelectorAll('.blessing-row')].find(
+        (r) => r.querySelector('.blessing-name')?.textContent === getBlessing(id).name,
+      )!;
+      ([...row.querySelectorAll('button')].find((b) => b.textContent === '入手') as HTMLButtonElement).click();
+    }
+
+    tap(findToken('青銅の')!);
+    const labels = [...detailSheet()!.querySelectorAll('.skill-label')].map((n) => n.textContent);
+    expect(labels).toContain('チーム全体');
+
+    const teamRow = [...detailSheet()!.querySelectorAll('.skill')].find(
+      (s) => s.querySelector('.skill-label')?.textContent === 'チーム全体',
+    )!;
+    (teamRow.querySelector('button') as HTMLButtonElement).click();
+
+    expect(sheetTitle()).toBe('チーム全体の加護');
+    const names = [...app().querySelectorAll('.sheet .blessing-name')].map((n) => n.textContent);
+    expect(names.sort()).toEqual([getBlessing('bl_inferno').name, getBlessing('bl_storm').name].sort());
+  });
+});
+
+describe('ポップアップの階層', () => {
+  function openTeamSheet(): void {
+    const row = [...app().querySelectorAll('.blessing-row')].find(
+      (r) => r.querySelector('.blessing-name')?.textContent === '嵐の加護',
+    )!;
+    ([...row.querySelectorAll('button')].find((b) => b.textContent === '入手') as HTMLButtonElement).click();
+    tap(findToken('青銅の')!);
+    const teamRow = [...detailSheet()!.querySelectorAll('.skill')].find(
+      (s) => s.querySelector('.skill-label')?.textContent === 'チーム全体',
+    )!;
+    (teamRow.querySelector('button') as HTMLButtonElement).click();
+  }
+
+  it('詳細シート → スキル説明 と閉じると1つ上に戻る', () => {
+    tap(findToken('青銅の')!);
+    expect(detailSheet()).toBeTruthy();
+    const active = [...detailSheet()!.querySelectorAll('.skill')].find(
+      (s) => s.querySelector('.skill-label')?.textContent === 'アクティブ',
+    )!;
+    (active.querySelector('button') as HTMLButtonElement).click();
+    expect(sheetTitle()).toContain('アクティブ');
+
+    closeSheet();
+    expect(detailSheet()).toBeTruthy(); // 詳細に戻る
+    closeSheet();
+    expect(sheet()).toBeNull();
+  });
+
+  it('詳細シート → 加護一覧 → 加護説明 と3段重なり、閉じるたびに1つ上に戻る', () => {
+    openTeamSheet();
+    expect(sheetTitle()).toBe('チーム全体の加護');
+
+    const row = [...app().querySelectorAll('.sheet .blessing-row')][0]!;
+    ([...row.querySelectorAll('button')].find((b) => b.textContent === '説明') as HTMLButtonElement).click();
+    expect(sheetTitle()).toBe('嵐の加護');
+
+    closeSheet();
+    expect(sheetTitle()).toBe('チーム全体の加護');
+    closeSheet();
+    expect(detailSheet()).toBeTruthy();
+    closeSheet();
+    expect(sheet()).toBeNull();
+  });
+
+  it('背景タップと Escape でも1つ上の階層に戻る', () => {
+    openTeamSheet();
+    const row = [...app().querySelectorAll('.sheet .blessing-row')][0]!;
+    ([...row.querySelectorAll('button')].find((b) => b.textContent === '説明') as HTMLButtonElement).click();
+    expect(sheetTitle()).toBe('嵐の加護');
+
+    tap(app().querySelector('.sheet-backdrop')!);
+    expect(sheetTitle()).toBe('チーム全体の加護');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(detailSheet()).toBeTruthy();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(sheet()).toBeNull();
   });
 });

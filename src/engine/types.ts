@@ -152,6 +152,13 @@ export interface Amount {
   flat?: number;
 }
 
+/** 対象をさらに絞り込む条件（属性・役割・神話圏） */
+export interface UnitFilter {
+  element?: Element;
+  role?: Role;
+  myth?: Myth;
+}
+
 /** 効果の対象 */
 export type TargetSpec =
   | 'self'
@@ -216,6 +223,8 @@ export type Effect =
       kind: 'statMod';
       target: TargetSpec;
       radius?: number;
+      /** 対象の絞り込み（属性・役割・神話圏）。省略すると全員 */
+      filter?: UnitFilter;
       stat: StatKey;
       mode: 'flat' | 'pct';
       value: number;
@@ -317,10 +326,18 @@ export interface EquipmentDef {
   effects?: EffectDef[];
 }
 
+/** 加護のレア度 */
+export type Rarity = 'common' | 'rare' | 'epic';
+export const RARITIES: readonly Rarity[] = ['common', 'rare', 'epic'];
+
 export interface BlessingDef {
   id: string;
   name: string;
+  /** 一覧に出す1行の説明 */
   desc: string;
+  /** ［説明］で開く短い説明文（倍率は書かない） */
+  summary: string;
+  rarity: Rarity;
   /** 編成確定時の補正（装備とは別枠で、割合補正の Σ に合流する） */
   buildMods?: BuildMod[];
   /** 戦闘中の効果（グローバル補正など） */

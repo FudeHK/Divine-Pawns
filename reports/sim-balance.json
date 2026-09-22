@@ -1,79 +1,79 @@
 {
   "loadouts": 1000,
   "battles": 6000,
-  "avgDuration": 17.62,
+  "avgDuration": 17.45,
   "timeoutRate": 0,
-  "overallWinRate": 89.4,
+  "overallWinRate": 89.92,
   "perEncounter": [
     {
       "encounter": "E0",
       "battles": 1000,
       "winRate": 100,
-      "avgDuration": 0.39,
+      "avgDuration": 0.38,
       "timeoutRate": 0,
-      "avgAllyDps": 1490.1
+      "avgAllyDps": 1520.6
     },
     {
       "encounter": "E1",
       "battles": 1000,
-      "winRate": 83.6,
-      "avgDuration": 24.26,
+      "winRate": 84.2,
+      "avgDuration": 24.04,
       "timeoutRate": 0,
-      "avgAllyDps": 214.9
+      "avgAllyDps": 218.1
     },
     {
       "encounter": "E2",
       "battles": 1000,
-      "winRate": 86.2,
-      "avgDuration": 17.29,
+      "winRate": 87.1,
+      "avgDuration": 17.11,
       "timeoutRate": 0,
-      "avgAllyDps": 234.7
+      "avgAllyDps": 237.9
     },
     {
       "encounter": "E3",
       "battles": 1000,
-      "winRate": 90.9,
-      "avgDuration": 15.02,
+      "winRate": 91.4,
+      "avgDuration": 14.85,
       "timeoutRate": 0,
-      "avgAllyDps": 250.1
+      "avgAllyDps": 253.8
     },
     {
       "encounter": "E4",
       "battles": 1000,
-      "winRate": 86.7,
-      "avgDuration": 22.1,
+      "winRate": 87.4,
+      "avgDuration": 21.94,
       "timeoutRate": 0,
-      "avgAllyDps": 236.5
+      "avgAllyDps": 239.4
     },
     {
       "encounter": "B1",
       "battles": 1000,
-      "winRate": 89,
-      "avgDuration": 26.66,
+      "winRate": 89.4,
+      "avgDuration": 26.4,
       "timeoutRate": 0,
-      "avgAllyDps": 221.7
+      "avgAllyDps": 224.5
     }
   ],
   "dpsByElement": [
     {
       "element": "fire",
-      "avgDps": 266.2,
-      "share": 36
+      "avgDps": 265.5,
+      "share": 35.3
     },
     {
       "element": "ice",
-      "avgDps": 100.5,
-      "share": 13.9
+      "avgDps": 100.9,
+      "share": 13.7
     },
     {
       "element": "wood",
-      "avgDps": 94.8,
-      "share": 12.3
+      "avgDps": 94.9,
+      "share": 12.1
     },
     {
       "element": "lightning",
-      "avgDps": 261.4,
-      "share": 37.8
+      "avgDps": 274.2,
+      "share": 39
     }
   ]
 }

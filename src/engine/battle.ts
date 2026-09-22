@@ -52,6 +52,7 @@ import {
   type Star,
   type Stats,
   type TargetSpec,
+  type UnitFilter,
 } from './types';
 
 const EPS = 1e-9;
@@ -182,6 +183,19 @@ function mergeGlobals(g: SideGlobals, element: Element): GlobalMods {
     burnDamagePct: a.burnDamagePct + b.burnDamagePct,
     poisonDurationAdd: a.poisonDurationAdd + b.poisonDurationAdd,
   };
+}
+
+/** 対象の絞り込み（属性・役割・神話圏） */
+function matchesFilter(u: Unit, f: UnitFilter | undefined): boolean {
+  if (!f) return true;
+  if (f.element !== undefined && f.element !== u.element) return false;
+  if (f.role !== undefined && f.role !== u.role) return false;
+  if (f.myth !== undefined && f.myth !== u.myth) return false;
+  return true;
+}
+
+function applyFilter(units: Unit[], f: UnitFilter | undefined): Unit[] {
+  return f ? units.filter((u) => matchesFilter(u, f)) : units;
 }
 
 /** 効果の分類：常時系（毎フレーム再適用）か、瞬間系か */
@@ -487,7 +501,7 @@ export class Battle {
       return;
     }
     if (eff.kind === 'statMod') {
-      for (const tg of this.teamTargets(te.side, eff.target)) {
+      for (const tg of applyFilter(this.teamTargets(te.side, eff.target), eff.filter)) {
         tg.auraMods.push({
           stat: eff.stat,
           mode: eff.mode,
@@ -506,7 +520,7 @@ export class Battle {
   private applyTeamInstant(te: RuntimeTeamEffect, eff: Effect): void {
     switch (eff.kind) {
       case 'statMod': {
-        for (const tg of this.teamTargets(te.side, eff.target)) {
+        for (const tg of applyFilter(this.teamTargets(te.side, eff.target), eff.filter)) {
           tg.timedMods.push({
             stat: eff.stat,
             mode: eff.mode,
@@ -542,20 +556,45 @@ export class Battle {
         break;
       }
       case 'shield': {
-        const v = eff.amount.flat ?? 0;
-        if (v > 0) for (const tg of this.teamTargets(te.side, eff.target)) tg.shield += v;
+        for (const tg of this.teamTargets(te.side, eff.target)) {
+          const v = this.teamAmount(tg, eff.amount);
+          if (v > 0) tg.shield += v;
+        }
+        break;
+      }
+      case 'heal': {
+        for (const tg of this.teamTargets(te.side, eff.target)) {
+          this.healFlat(tg, this.teamAmount(tg, eff.amount), te.def.name);
+        }
         break;
       }
       case 'damage': {
-        const v = eff.amount.flat ?? 0;
         for (const tg of this.teamTargets(te.side, eff.target)) {
-          this.dealDamage(null, tg, v, te.def.name, null);
+          this.dealDamage(null, tg, this.teamAmount(tg, eff.amount), te.def.name, null);
         }
         break;
       }
       default:
         break;
     }
+  }
+
+  /**
+   * チーム効果の効果量。
+   * チーム自身にはステータスがないので、参照ステータスは対象のものを使う。
+   * 固定値（flat）と割合（stat × coef）のどちらも書ける。
+   */
+  private teamAmount(target: Unit, a: Amount): number {
+    return target.eff[a.stat] * a.coef + (a.flat ?? 0);
+  }
+
+  /** 参照なしの回復（チーム効果用） */
+  private healFlat(target: Unit, amount: number, note: string): void {
+    if (!target.alive || !target.onField) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const before = target.hp;
+    target.hp = Math.min(target.base.maxHp, target.hp + amount);
+    this.emit({ type: 'heal', target: target.id, value: target.hp - before, note });
   }
 
   private canUse(re: RuntimeEffect): boolean {
@@ -565,7 +604,7 @@ export class Battle {
   private applyContinuous(source: Unit, eff: Effect, sourceId: string): void {
     switch (eff.kind) {
       case 'statMod': {
-        const targets = this.resolveTargets(source, eff.target, eff.radius);
+        const targets = applyFilter(this.resolveTargets(source, eff.target, eff.radius), eff.filter);
         for (const tg of targets) {
           tg.auraMods.push({
             stat: eff.stat,
@@ -878,7 +917,7 @@ export class Battle {
         break;
       }
       case 'statMod': {
-        const targets = this.resolveTargets(source, eff.target, eff.radius);
+        const targets = applyFilter(this.resolveTargets(source, eff.target, eff.radius), eff.filter);
         for (const tg of targets) {
           tg.timedMods.push({
             stat: eff.stat,

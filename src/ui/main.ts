@@ -23,6 +23,7 @@ import type {
   Hex,
   Loadout,
   Myth,
+  Rarity,
   Role,
   Star,
   Stats,
@@ -49,10 +50,12 @@ type DetailTarget =
   | { kind: 'enemySlot'; index: number }
   | { kind: 'unit'; unitId: string };
 
-/** 画面下から開くシート */
+/** 画面下から開くシート。重ねて開ける（閉じると1つ上の階層に戻る） */
 type Sheet =
   | { kind: 'detail'; target: DetailTarget }
   | { kind: 'equip'; charId: string }
+  /** 所持中の加護の一覧 */
+  | { kind: 'blessings' }
   | { kind: 'explain'; title: string; text: string };
 
 const team = DEFAULT_CONFIG.team;
@@ -129,6 +132,11 @@ const DEBUFF_COLOR: Record<DebuffKind, string> = {
   paralysis: '#d29bff',
 };
 const DEBUFF_ORDER: DebuffKind[] = ['burn', 'frostbite', 'poison', 'paralysis'];
+const RARITY_LABEL: Record<Rarity, string> = {
+  common: 'コモン',
+  rare: 'レア',
+  epic: 'エピック',
+};
 
 // ---------------------------------------------------------------------------
 // 参照ヘルパー
@@ -890,18 +898,37 @@ function renderSetup(root: HTMLElement): void {
     root.appendChild(card);
   }
 
-  root.appendChild(h('h2', undefined, '加護'));
-  const blRow = h('div', 'row');
-  for (const b of BLESSINGS) {
-    blRow.appendChild(
-      btn(b.name, state.blessings.has(b.id), () => {
-        if (state.blessings.has(b.id)) state.blessings.delete(b.id);
+  // 加護（所持中のものが上、名前・1行の説明・レア度・［説明］）
+  root.appendChild(h('h2', undefined, `加護（所持 ${state.blessings.size}）`));
+  const blSection = h('div', 'blessings');
+  const sorted = [...BLESSINGS].sort((a, b) => {
+    const oa = state.blessings.has(a.id) ? 0 : 1;
+    const ob = state.blessings.has(b.id) ? 0 : 1;
+    return oa - ob;
+  });
+  for (const b of sorted) {
+    const owned = state.blessings.has(b.id);
+    const row = h('div', 'blessing-row' + (owned ? ' owned' : ''));
+    const col = h('div', 'blessing-main');
+    const head = h('div', 'blessing-head');
+    head.appendChild(h('span', 'blessing-name', b.name));
+    head.appendChild(h('span', `tag rarity-${b.rarity}`, RARITY_LABEL[b.rarity]));
+    col.appendChild(head);
+    col.appendChild(h('div', 'blessing-desc', b.desc));
+    row.appendChild(col);
+    row.appendChild(
+      btn(owned ? '所持' : '入手', owned, () => {
+        if (owned) state.blessings.delete(b.id);
         else state.blessings.add(b.id);
         render();
       }),
     );
+    row.appendChild(
+      btn('説明', false, () => openSheet({ kind: 'explain', title: b.name, text: b.summary })),
+    );
+    blSection.appendChild(row);
   }
-  root.appendChild(blRow);
+  root.appendChild(blSection);
 }
 
 function renderBattle(root: HTMLElement): void {
@@ -1063,6 +1090,15 @@ function renderDetailSheet(root: HTMLElement, target: DetailTarget): void {
   }
   body.appendChild(eqRow);
 
+  // チーム全体（所持中の加護）
+  const teamRow = h('div', 'skill team-row');
+  teamRow.appendChild(h('span', 'skill-label', 'チーム全体'));
+  teamRow.appendChild(
+    h('span', 'skill-name', state.blessings.size > 0 ? `加護 ${state.blessings.size} 個` : '加護なし'),
+  );
+  teamRow.appendChild(btn('一覧', false, () => openSheet({ kind: 'blessings' })));
+  body.appendChild(teamRow);
+
   // スキル3行
   for (const s of view.skills) {
     const line = h('div', 'skill');
@@ -1106,6 +1142,36 @@ function renderEquipSheet(root: HTMLElement, charId: string): void {
   root.appendChild(wrap);
 }
 
+/** 所持中の加護の一覧（1行の説明とレア度つき） */
+function blessingListRows(parent: HTMLElement, owned: boolean): void {
+  const list = BLESSINGS.filter((b) => (owned ? state.blessings.has(b.id) : true));
+  if (list.length === 0) {
+    parent.appendChild(h('div', 'hint', '加護をまだ持っていません'));
+    return;
+  }
+  for (const b of list) {
+    const row = h('div', 'blessing-row' + (state.blessings.has(b.id) ? ' owned' : ''));
+    const col = h('div', 'blessing-main');
+    const head = h('div', 'blessing-head');
+    head.appendChild(h('span', 'blessing-name', b.name));
+    head.appendChild(h('span', `tag rarity-${b.rarity}`, RARITY_LABEL[b.rarity]));
+    col.appendChild(head);
+    col.appendChild(h('div', 'blessing-desc', b.desc));
+    row.appendChild(col);
+    row.appendChild(
+      btn('説明', false, () => openSheet({ kind: 'explain', title: b.name, text: b.summary })),
+    );
+    parent.appendChild(row);
+  }
+}
+
+function renderBlessingsSheet(root: HTMLElement): void {
+  const { wrap, body } = sheetShell('チーム全体の加護');
+  body.classList.add('blessings');
+  blessingListRows(body, true);
+  root.appendChild(wrap);
+}
+
 function renderExplainSheet(root: HTMLElement, title: string, text: string): void {
   const { wrap, body } = sheetShell(title, true);
   for (const line of text.split('\n')) {
@@ -1119,13 +1185,14 @@ function renderSheets(root: HTMLElement): void {
   if (!top) return;
   if (top.kind === 'detail') renderDetailSheet(root, top.target);
   else if (top.kind === 'equip') renderEquipSheet(root, top.charId);
+  else if (top.kind === 'blessings') renderBlessingsSheet(root);
   else renderExplainSheet(root, top.title, top.text);
 }
 
 function render(): void {
   const root = document.getElementById('app')!;
   root.textContent = '';
-  root.appendChild(h('h1', undefined, 'フェーズ1 戦闘検証（仮）'));
+  root.appendChild(h('h1', undefined, 'Divine Pawns（仮題） 戦闘検証'));
   if (state.replay) renderBattle(root);
   else renderSetup(root);
   renderBottomBar(root);
