@@ -109,3 +109,24 @@ describe('盤面が潰れない', () => {
     }
   });
 });
+
+describe('B6 下部バーの高さは固定', () => {
+  it('CSS で height / min-height / max-height をすべて同じ値に固定している', () => {
+    const decls = new Map(
+      ruleBody('.bottom-bar')
+        .split(';')
+        .map((d) => d.split(':'))
+        .filter((kv) => kv.length >= 2)
+        .map((kv) => [kv[0]!.trim(), kv.slice(1).join(':').trim()]),
+    );
+    const want = 'calc(var(--bar-max-vh) * 1vh)';
+    for (const prop of ['height', 'min-height', 'max-height']) {
+      expect(decls.get(prop), prop).toBe(want);
+    }
+  });
+
+  it('中身が多いタブでも内部スクロールで吸収する（外枠は変えない）', () => {
+    expect(ruleBody('.tab-body')).toContain('overflow-y: auto');
+    expect(ruleBody('.tab-body')).toContain('flex: 1 1 auto');
+  });
+});

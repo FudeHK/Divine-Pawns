@@ -30,10 +30,20 @@ export interface OwnedChar {
   uid: string;
   charId: string;
   star: Star;
+  /** 覚えているスキルID */
+  skills: string[];
   /** 装備。添字がスロット番号。空きは '' */
   equipment: string[];
   slot: 'frontline' | 'support' | 'none';
   pos?: Hex;
+}
+
+/** 合成でランクアップした直後の、3択のスキル選択 */
+export interface PendingSkillChoice {
+  uid: string;
+  charId: string;
+  /** 選べるスキルID（最大3つ） */
+  options: string[];
 }
 
 /** ショップに並ぶ品 */
@@ -112,4 +122,7 @@ export interface RunState {
   eventId: string | null;
   /** 直近のイベント結果 */
   lastEvent: EventOutcome | null;
+
+  /** 合成直後のスキル3択（未選択の間だけ入る） */
+  pendingSkill: PendingSkillChoice | null;
 }

@@ -37,8 +37,8 @@ describe('データ定義の検証', () => {
     expect(() => validateAll(zEquipmentDef, [...EQUIPMENT], 'EQUIPMENT')).not.toThrow();
     expect(() => validateAll(zBlessingDef, [...BLESSINGS], 'BLESSINGS')).not.toThrow();
     expect(() => validateAll(zEncounterDef, [...ENCOUNTERS], 'ENCOUNTERS')).not.toThrow();
-    expect(EQUIPMENT).toHaveLength(3);
-    expect(BLESSINGS.length).toBeGreaterThanOrEqual(3);
+    expect(EQUIPMENT.length).toBeGreaterThanOrEqual(15);
+    expect(BLESSINGS.length).toBeGreaterThanOrEqual(8);
   });
 
   it('壊れたデータは弾かれる', () => {
@@ -63,11 +63,14 @@ describe('データ定義の検証', () => {
     }
   });
 
-  it('キャラはアクティブ1つ・パッシブ1つ以上・サポート効果1つ以上を持つ', () => {
+  it('キャラは3つ以上のスキルプールと、初期スキル2つを持つ', () => {
     for (const c of CHARACTERS) {
-      expect(c.active.trigger.kind).toBe('onSkill');
-      expect(c.passives.length).toBeGreaterThan(0);
-      expect(c.support.length).toBeGreaterThan(0);
+      expect(c.skills.length, c.id).toBeGreaterThanOrEqual(3);
+      expect(c.initialSkills, c.id).toHaveLength(2);
+      const kinds = c.initialSkills.map((id) => c.skills.find((s) => s.id === id)!.kind);
+      expect(kinds, c.id).toContain('support');
+      expect(kinds.some((k) => k === 'active' || k === 'passive'), c.id).toBe(true);
+      expect(c.skills.some((s) => s.kind === 'active'), c.id).toBe(true);
       expect([1, 2, 3]).toContain(c.tier);
     }
   });

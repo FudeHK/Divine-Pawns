@@ -38,6 +38,19 @@ export const zStats = z.object({
   moveSpeed: z.number().positive(),
 });
 
+/** 装備などの補正値。下げる効果も書けるよう、符号は問わない */
+export const zStatsDelta = z
+  .object({
+    maxHp: z.number(),
+    atk: z.number(),
+    def: z.number(),
+    atkSpeed: z.number(),
+    range: z.number(),
+    maxMana: z.number(),
+    moveSpeed: z.number(),
+  })
+  .partial();
+
 export const zHex = z.object({
   x: z.number().int().min(0).max(4),
   y: z.number().int().min(0).max(5),
@@ -179,19 +192,48 @@ export const zEffectDef: z.ZodType<EffectDef> = z.object({
   maxUses: z.number().int().positive().optional(),
 }) as z.ZodType<EffectDef>;
 
-export const zCharacterDef: z.ZodType<CharacterDef> = z.object({
-  id: z.string().regex(/^[A-Z]{3}_[A-Z]$/),
-  name: z.string().min(1),
-  shortName: zShortName,
-  myth: zMyth,
-  role: zRole,
-  element: zElement,
-  tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-  base: zStats,
-  active: zEffectDef,
-  passives: z.array(zEffectDef),
-  support: z.array(zEffectDef),
-}) as z.ZodType<CharacterDef>;
+export const zSkillKind = z.enum(['active', 'passive', 'support']);
+
+export const zSkillDef = z.object({
+  id: z.string().min(1),
+  kind: zSkillKind,
+  def: zEffectDef,
+});
+
+export const zCharacterDef: z.ZodType<CharacterDef> = z
+  .object({
+    id: z.string().regex(/^[A-Z]{3}_[A-Z]$/),
+    name: z.string().min(1),
+    shortName: zShortName,
+    myth: zMyth,
+    role: zRole,
+    element: zElement,
+    tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    base: zStats,
+    skills: z.array(zSkillDef).min(3),
+    initialSkills: z.array(z.string().min(1)).length(2),
+  })
+  .superRefine((c, ctx) => {
+    const byId = new Map(c.skills.map((s) => [s.id, s]));
+    for (const id of c.initialSkills) {
+      if (!byId.has(id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `初期スキルがプールにない: ${id}` });
+      }
+    }
+    const kinds = c.initialSkills.map((id) => byId.get(id)?.kind);
+    if (!kinds.includes('support')) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: '初期スキルにサポートが要る' });
+    }
+    if (!kinds.includes('active') && !kinds.includes('passive')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '初期スキルにアクティブかパッシブが要る',
+      });
+    }
+    if (c.skills.filter((s) => s.kind === 'active').length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'アクティブ候補が要る' });
+    }
+  }) as unknown as z.ZodType<CharacterDef>;
 
 export const zEnemyDef: z.ZodType<EnemyDef> = z.object({
   id: z.string().min(1),
@@ -224,9 +266,11 @@ export const zBuildMod = z.object({
 export const zEquipmentDef: z.ZodType<EquipmentDef> = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  desc: z.string(),
-  flat: zStats.partial().optional(),
-  pct: zStats.partial().optional(),
+  desc: z.string().min(1).max(40),
+  tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  element: zElement.optional(),
+  flat: zStatsDelta.optional(),
+  pct: zStatsDelta.optional(),
   effects: z.array(zEffectDef).optional(),
 }) as z.ZodType<EquipmentDef>;
 

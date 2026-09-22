@@ -59,18 +59,15 @@ describe('shortName', () => {
 });
 
 describe('summary', () => {
-  const allCharEffects = (): EffectDef[] =>
-    CHARACTERS.flatMap((c) => [c.active, ...c.passives, ...c.support]);
+  const allCharEffects = (): EffectDef[] => CHARACTERS.flatMap((c) => c.skills.map((s) => s.def));
   const allEnemyEffects = (): EffectDef[] =>
     ENEMIES.flatMap((e) => [...(e.active ? [e.active] : []), ...(e.passives ?? [])]);
 
-  it('全キャラのアクティブ・パッシブ・サポート効果に説明文がある', () => {
+  it('全キャラのスキルに説明文がある', () => {
     for (const c of CHARACTERS) {
-      expect(c.active.summary, `${c.id} active`).toBeTruthy();
-      expect(c.passives.length, `${c.id} passives`).toBeGreaterThan(0);
-      expect(c.support.length, `${c.id} support`).toBeGreaterThan(0);
-      for (const d of [...c.passives, ...c.support]) {
-        expect(d.summary, `${c.id} ${d.id}`).toBeTruthy();
+      expect(c.skills.length, c.id).toBeGreaterThanOrEqual(3);
+      for (const sk of c.skills) {
+        expect(sk.def.summary, `${c.id} ${sk.id}`).toBeTruthy();
       }
     }
   });

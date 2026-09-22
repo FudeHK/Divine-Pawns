@@ -45,10 +45,10 @@ const raw: EncounterDef[] = [
     id: 'E4',
     name: '通常戦 4（デバフ持ち入り）',
     units: [
-      { enemyId: 'en_bulwark', pos: { x: 2, y: 2 }, scale: 0.95 },
-      { enemyId: 'en_venomancer', pos: { x: 1, y: 1 }, scale: 1.0 },
-      { enemyId: 'en_shaman', pos: { x: 2, y: 1 }, scale: 1.0 },
-      { enemyId: 'en_sparker', pos: { x: 2, y: 0 }, scale: 1.0 },
+      { enemyId: 'en_bulwark', pos: { x: 2, y: 2 }, scale: 0.86 },
+      { enemyId: 'en_venomancer', pos: { x: 1, y: 1 }, scale: 0.9 },
+      { enemyId: 'en_shaman', pos: { x: 2, y: 1 }, scale: 0.9 },
+      { enemyId: 'en_sparker', pos: { x: 2, y: 0 }, scale: 0.9 },
     ],
   },
   {

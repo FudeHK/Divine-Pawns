@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T09:06:26.283Z",
+  "generatedAt": "2026-09-22T13:14:29.775Z",
   "determinism": {
     "total": 1000,
     "matched": 1000,
@@ -26,7 +26,7 @@
         "battles": 28,
         "wins": 28,
         "winRate": 100,
-        "avgDuration": 3.77,
+        "avgDuration": 4,
         "losses": []
       },
       {
@@ -117,49 +117,49 @@
         "wins": 2184,
         "winRate": 100,
         "inBand": false,
-        "bestPlacement": "0,3 / 1,4 / 3,5",
+        "bestPlacement": "0,3 / 2,3 / 3,3",
         "worstPlacement": null,
-        "avgDuration": 2.78
+        "avgDuration": 2.82
       },
       {
         "encounter": "E2",
         "placements": 2184,
-        "wins": 1608,
-        "winRate": 73.6,
+        "wins": 1282,
+        "winRate": 58.7,
         "inBand": true,
-        "bestPlacement": "4,5 / 3,3 / 0,5",
-        "worstPlacement": "0,3 / 2,3 / 4,3",
-        "avgDuration": 20.31
+        "bestPlacement": "3,3 / 0,3 / 2,4",
+        "worstPlacement": "0,3 / 1,3 / 3,3",
+        "avgDuration": 20.72
       },
       {
         "encounter": "E3",
         "placements": 2184,
-        "wins": 1426,
-        "winRate": 65.3,
+        "wins": 1097,
+        "winRate": 50.2,
         "inBand": true,
-        "bestPlacement": "2,4 / 0,5 / 1,5",
+        "bestPlacement": "0,5 / 1,4 / 2,4",
         "worstPlacement": "0,3 / 1,3 / 3,3",
-        "avgDuration": 19.62
+        "avgDuration": 19.42
       },
       {
         "encounter": "E4",
         "placements": 2184,
-        "wins": 1051,
-        "winRate": 48.1,
+        "wins": 1724,
+        "winRate": 78.9,
         "inBand": true,
-        "bestPlacement": "2,4 / 1,3 / 0,5",
-        "worstPlacement": "0,3 / 1,3 / 2,3",
+        "bestPlacement": "4,3 / 0,3 / 1,3",
+        "worstPlacement": "1,3 / 0,3 / 2,3",
         "avgDuration": 26.92
       },
       {
         "encounter": "B1",
         "placements": 2184,
-        "wins": 1265,
-        "winRate": 57.9,
+        "wins": 609,
+        "winRate": 27.9,
         "inBand": true,
-        "bestPlacement": "4,4 / 3,5 / 0,5",
+        "bestPlacement": "2,4 / 0,3 / 1,3",
         "worstPlacement": "0,3 / 1,3 / 2,3",
-        "avgDuration": 32.9
+        "avgDuration": 31.95
       }
     ],
     "encountersInBand": 4,
@@ -168,79 +168,79 @@
   "balance": {
     "loadouts": 1000,
     "battles": 6000,
-    "avgDuration": 13.82,
+    "avgDuration": 13.1,
     "timeoutRate": 0,
-    "overallWinRate": 92.55,
+    "overallWinRate": 92.22,
     "perEncounter": [
       {
         "encounter": "E0",
         "battles": 1000,
         "winRate": 100,
-        "avgDuration": 0.38,
+        "avgDuration": 0.39,
         "timeoutRate": 0,
-        "avgAllyDps": 1520.6
+        "avgAllyDps": 1495.3
       },
       {
         "encounter": "E1",
         "battles": 1000,
         "winRate": 100,
-        "avgDuration": 2.26,
+        "avgDuration": 2.23,
         "timeoutRate": 0,
-        "avgAllyDps": 301.1
+        "avgAllyDps": 310.3
       },
       {
         "encounter": "E2",
         "battles": 1000,
-        "winRate": 87.1,
-        "avgDuration": 17.11,
+        "winRate": 85.5,
+        "avgDuration": 16.71,
         "timeoutRate": 0,
-        "avgAllyDps": 237.9
+        "avgAllyDps": 244.1
       },
       {
         "encounter": "E3",
         "battles": 1000,
-        "winRate": 91.4,
-        "avgDuration": 14.85,
+        "winRate": 90.2,
+        "avgDuration": 14.64,
         "timeoutRate": 0,
-        "avgAllyDps": 253.8
+        "avgAllyDps": 258.6
       },
       {
         "encounter": "E4",
         "battles": 1000,
-        "winRate": 87.4,
-        "avgDuration": 21.94,
+        "winRate": 92,
+        "avgDuration": 19.36,
         "timeoutRate": 0,
-        "avgAllyDps": 239.4
+        "avgAllyDps": 252.5
       },
       {
         "encounter": "B1",
         "battles": 1000,
-        "winRate": 89.4,
-        "avgDuration": 26.4,
+        "winRate": 85.6,
+        "avgDuration": 25.29,
         "timeoutRate": 0,
-        "avgAllyDps": 224.5
+        "avgAllyDps": 232.4
       }
     ],
     "dpsByElement": [
       {
         "element": "fire",
-        "avgDps": 271.4,
-        "share": 35
+        "avgDps": 273.3,
+        "share": 36.1
       },
       {
         "element": "ice",
-        "avgDps": 105.9,
-        "share": 13.9
+        "avgDps": 107.9,
+        "share": 14.1
       },
       {
         "element": "wood",
-        "avgDps": 97.3,
-        "share": 12
+        "avgDps": 96.2,
+        "share": 12.1
       },
       {
         "element": "lightning",
-        "avgDps": 283.9,
-        "share": 39.1
+        "avgDps": 275.2,
+        "share": 37.7
       }
     ]
   },
@@ -249,10 +249,10 @@
     "builds": [
       {
         "name": "基準（★1・装備なし・加護なし）",
-        "dummyDps": 244.2,
-        "dummyFireDps": 213.8,
+        "dummyDps": 236.2,
+        "dummyFireDps": 205.8,
         "dummyDpsByElement": {
-          "fire": 213.8,
+          "fire": 205.8,
           "ice": 30.4,
           "wood": 0,
           "lightning": 0
@@ -261,48 +261,48 @@
         "perEncounter": [
           {
             "encounter": "E0",
-            "dps": 2617,
+            "dps": 2570,
             "win": true,
             "duration": 0.1
           },
           {
             "encounter": "E1",
-            "dps": 230,
+            "dps": 225.9,
             "win": true,
             "duration": 2.9
           },
           {
             "encounter": "E2",
-            "dps": 201.2,
+            "dps": 197.8,
             "win": true,
-            "duration": 18.3
+            "duration": 18.2
           },
           {
             "encounter": "E3",
-            "dps": 156.9,
+            "dps": 153,
             "win": true,
             "duration": 20.5
           },
           {
             "encounter": "E4",
-            "dps": 172.2,
+            "dps": 192.5,
             "win": true,
-            "duration": 25.5
+            "duration": 22
           },
           {
             "encounter": "B1",
-            "dps": 175.4,
+            "dps": 148.9,
             "win": true,
-            "duration": 28.6
+            "duration": 33.7
           }
         ]
       },
       {
         "name": "燃焼ビルド（★3・装備あり・業火の加護・炎サポート）",
-        "dummyDps": 933,
-        "dummyFireDps": 839.7,
+        "dummyDps": 1164.1,
+        "dummyFireDps": 1070.8,
         "dummyDpsByElement": {
-          "fire": 839.7,
+          "fire": 1070.8,
           "ice": 93.3,
           "wood": 0,
           "lightning": 0
@@ -323,40 +323,40 @@
           },
           {
             "encounter": "E2",
-            "dps": 630.2,
+            "dps": 644.4,
             "win": true,
             "duration": 6.4
           },
           {
             "encounter": "E3",
-            "dps": 674.4,
+            "dps": 679.9,
             "win": true,
             "duration": 5
           },
           {
             "encounter": "E4",
-            "dps": 568.3,
+            "dps": 604.6,
             "win": true,
-            "duration": 8.5
+            "duration": 7.3
           },
           {
             "encounter": "B1",
-            "dps": 669.5,
+            "dps": 709.4,
             "win": true,
-            "duration": 9
+            "duration": 8.6
           }
         ]
       }
     ],
-    "maxDpsRatio": 3.82,
-    "fireDpsRatio": 3.93
+    "maxDpsRatio": 4.93,
+    "fireDpsRatio": 5.2
   },
   "perf": {
     "battles": 10000,
-    "seconds": 13.79,
-    "battlesPerSecond": 725.4,
-    "avgTicksPerBattle": 98.3,
-    "avgDuration": 9.83,
+    "seconds": 10.57,
+    "battlesPerSecond": 946,
+    "avgTicksPerBattle": 90.6,
+    "avgDuration": 9.06,
     "logging": true
   },
   "pass": true

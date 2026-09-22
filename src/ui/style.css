@@ -367,7 +367,10 @@ select {
 
 .bottom-bar {
   flex: 0 0 auto;
+  /* B6: どのタブでも外枠の高さは変わらない */
+  height: calc(var(--bar-max-vh) * 1vh);
   max-height: calc(var(--bar-max-vh) * 1vh);
+  min-height: calc(var(--bar-max-vh) * 1vh);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -392,6 +395,7 @@ select {
 .tab-body {
   flex: 1 1 auto;
   min-height: 0;
+  /* 中身が少ないタブでもバーの高さは変えず、内部だけスクロールする */
   overflow-y: auto;
   overflow-x: hidden;
   font-size: var(--font-sub);
@@ -918,4 +922,50 @@ select {
   50% {
     transform: translateY(-4px);
   }
+}
+
+
+/* --- 追加要素 --- */
+
+.star-tag {
+  color: var(--accent);
+}
+
+.equip-tier-1 {
+  color: var(--muted);
+}
+.equip-tier-2 {
+  color: var(--ice);
+}
+.equip-tier-3 {
+  color: var(--accent);
+}
+
+.result-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-screen .screen-title {
+  font-size: var(--font-title);
+}
+
+.result-screen .screen-text {
+  font-size: var(--font-heading);
+}
+
+/* 結果画面の「次へ」はそこそこ小さめに */
+.next-btn {
+  align-self: flex-end;
+  min-width: 96px;
+  flex: 0 0 auto;
+}
+
+.inventory-row .blessing-name {
+  font-size: var(--font-body);
+}
+
+.skill-choice .sheet-list-item {
+  align-items: flex-start;
 }

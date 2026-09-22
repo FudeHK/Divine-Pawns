@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { CHARACTERS, getSkill } from '../src/data/characters';
 import { EVENTS, RISKY_EVENTS, SAFE_EVENTS, getEvent } from '../src/data/events';
 import { DEFAULT_RUN_CONFIG, cloneRunConfig } from '../src/game/config';
 import {
@@ -12,10 +13,14 @@ import {
   buyShopItem,
   chapterNodes,
   chooseEvent,
+  chooseSkill,
   createRun,
   currentNode,
   grantPromotion,
   grantSixthSlot,
+  makeOwnedChar,
+  mergeCandidates,
+  mergeChars,
   progressMap,
   rerollShop,
   resolveEventBattle,
@@ -555,5 +560,139 @@ describe('ラン編成 → 戦闘エンジン', () => {
     const r = run();
     r.blessings.push('bl_storm');
     expect(runLoadout(r).blessings).toEqual(['bl_storm']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A4 リロール価格（1回目1c、以降+1c、ショップごとにリセット）
+// ---------------------------------------------------------------------------
+
+describe('A4 リロール価格', () => {
+  it('1回目は1c、押すたびに+1c', () => {
+    const r = run();
+    applyBattleResult(r, true, cfg);
+    r.coins = 50;
+    expect(r.shop!.rerollCost).toBe(1);
+    expect(rerollShop(r, cfg)).toBe(true);
+    expect(r.shop!.rerollCost).toBe(2);
+    expect(rerollShop(r, cfg)).toBe(true);
+    expect(r.shop!.rerollCost).toBe(3);
+    expect(rerollShop(r, cfg)).toBe(true);
+    expect(r.shop!.rerollCost).toBe(4);
+    // 1 + 2 + 3 = 6 コイン使った
+    expect(r.coins).toBe(50 - 6);
+  });
+
+  it('次のショップに入ると1cに戻る', () => {
+    const r = run();
+    applyBattleResult(r, true, cfg);
+    r.coins = 50;
+    rerollShop(r, cfg);
+    rerollShop(r, cfg);
+    expect(r.shop!.rerollCost).toBe(3);
+
+    advanceNode(r, cfg); // イベントへ
+    advanceTo(r, 'shop');
+    expect(r.shop!.rerollCost).toBe(1);
+    expect(r.shop!.rerolls).toBe(0);
+  });
+
+  it('コインが足りなければリロールできない', () => {
+    const r = run();
+    applyBattleResult(r, true, cfg);
+    r.coins = 0;
+    expect(rerollShop(r, cfg)).toBe(false);
+    expect(r.shop!.rerollCost).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A3 スキル（初期1＋1、合成で3択）
+// ---------------------------------------------------------------------------
+
+describe('A3 スキルの取得', () => {
+  it('初期は「アクティブ or パッシブ」1つ＋「サポート」1つだけ', () => {
+    const r = run();
+    const o = r.roster[0]!;
+    expect(o.star).toBe(1);
+    expect(o.skills).toHaveLength(2);
+    const kinds = o.skills.map((id) => getSkill(o.charId, id).kind);
+    expect(kinds).toContain('support');
+    expect(kinds.some((k) => k === 'active' || k === 'passive')).toBe(true);
+  });
+
+  it('同じキャラ・同じ★が2体そろうと合成できる', () => {
+    const r = run();
+    const base = r.roster[0]!;
+    expect(mergeCandidates(r)).toHaveLength(0);
+
+    r.roster.push(makeOwnedChar(base.charId, base.star));
+    const pair = mergeCandidates(r);
+    expect(pair).toHaveLength(1);
+
+    expect(mergeChars(r, pair[0]!.a.uid, pair[0]!.b.uid)).toBe(true);
+    expect(r.roster).toHaveLength(1);
+    expect(r.roster[0]!.star).toBe(2);
+    // 3択が立つ
+    expect(r.pendingSkill).not.toBeNull();
+    expect(r.pendingSkill!.options.length).toBeGreaterThan(0);
+    expect(r.pendingSkill!.options.length).toBeLessThanOrEqual(3);
+  });
+
+  it('3択から1つ選ぶと覚え、残りは今回は失う', () => {
+    const r = run();
+    const base = r.roster[0]!;
+    r.roster.push(makeOwnedChar(base.charId, base.star));
+    const pair = mergeCandidates(r)[0]!;
+    mergeChars(r, pair.a.uid, pair.b.uid);
+
+    const opts = [...r.pendingSkill!.options];
+    const pick = opts[0]!;
+    expect(chooseSkill(r, pick)).toBe(true);
+    expect(r.pendingSkill).toBeNull();
+    const o = r.roster[0]!;
+    expect(o.skills).toContain(pick);
+    for (const other of opts.slice(1)) expect(o.skills).not.toContain(other);
+    expect(o.skills).toHaveLength(3);
+  });
+
+  it('3択にないスキルは選べない', () => {
+    const r = run();
+    const base = r.roster[0]!;
+    r.roster.push(makeOwnedChar(base.charId, base.star));
+    const pair = mergeCandidates(r)[0]!;
+    mergeChars(r, pair.a.uid, pair.b.uid);
+    expect(chooseSkill(r, 'no_such_skill')).toBe(false);
+    expect(r.pendingSkill).not.toBeNull();
+  });
+
+  it('★3が上限で、違うキャラ同士は合成できない', () => {
+    const r = run();
+    const a = r.roster[0]!;
+    a.star = 3;
+    r.roster.push(makeOwnedChar(a.charId, 3));
+    expect(mergeCandidates(r)).toHaveLength(0);
+
+    const other = CHARACTERS.find((c) => c.id !== a.charId)!;
+    r.roster.push(makeOwnedChar(other.id, 3));
+    expect(mergeChars(r, r.roster[0]!.uid, r.roster[2]!.uid)).toBe(false);
+  });
+
+  it('合成すると、消えた方の装備は在庫に戻る', () => {
+    const r = run();
+    const base = r.roster[0]!;
+    const mate = makeOwnedChar(base.charId, base.star);
+    mate.equipment = ['eq_power'];
+    r.roster.push(mate);
+    const pair = mergeCandidates(r)[0]!;
+    // b の方が消える
+    mergeChars(r, pair.a.uid, pair.b.uid);
+    expect(r.inventory).toContain('eq_power');
+  });
+
+  it('戦闘に渡る編成には、覚えているスキルだけが入る', () => {
+    const r = run();
+    const o = r.roster[0]!;
+    expect(runLoadout(r).frontline[0]!.skills).toEqual(o.skills);
   });
 });

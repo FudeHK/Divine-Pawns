@@ -219,7 +219,8 @@ describe('A2 キャラを1体ずつ表示する', () => {
     const c = card();
     expect(c.querySelector('.char-name')?.textContent).toBeTruthy();
     expect(c.querySelector('.char-id')?.textContent).toBeTruthy();
-    expect(c.querySelector('select')).toBeTruthy();
+    expect(c.querySelector('.sandbox-star')).toBeTruthy(); // ラン外だけ★を直接変えられる
+    expect(c.querySelector('.tag.star-tag')?.textContent).toBe('★1');
     expect(c.querySelector('.char-slot-state')).toBeTruthy();
     expect(c.querySelectorAll('.char-quick .quick-cell').length).toBe(4);
     const labels = [...c.querySelectorAll('button')].map((b) => b.textContent);
@@ -606,29 +607,28 @@ describe('ラン進行とメイン画面の切り替え', () => {
     expect(tabBody().querySelector('.event-text')).toBeNull();
   });
 
-  it('prep → battle → result → nodeTransition → shop → nodeTransition → event と一巡する', () => {
+  it('prep → battle → result → shop → result → event → result → prep と一巡する', () => {
     startRun();
     expect(screen()).toBe('prep');
 
     fightThrough();
-    // リザルトはメイン画面に出る（盤面は出ない）
+    // リザルトはメイン画面に1画面で出る（進行マップの別画面は出さない）
     expect(screen()).toBe('result');
     expect(hasBoard()).toBe(false);
     expect(mainArea().querySelector('.screen-title')!.textContent).toMatch(/勝利|敗北/);
+    expect(mainArea().textContent).toContain('次は「ショップ」');
+    expect(mainArea().querySelector('.run-map')).toBeNull();
+    expect([...mainArea().querySelectorAll('button')].map((b) => b.textContent)).toEqual(['次へ']);
 
     findButton('次へ')!.click();
-    expect(screen()).toBe('nodeTransition');
-    expect(hasBoard()).toBe(false);
-    expect(mainArea().querySelector('.run-map.moving')).toBeTruthy();
-
-    findButton('進む')!.click();
     expect(screen()).toBe('shop');
     expect(hasBoard()).toBe(false);
     expect(mainArea().querySelectorAll('.shop-row').length).toBe(6);
 
     findButton('次へ進む')!.click();
-    expect(screen()).toBe('nodeTransition');
-    findButton('進む')!.click();
+    expect(screen()).toBe('result');
+    expect(mainArea().textContent).toContain('次は「イベント」');
+    findButton('次へ')!.click();
     expect(screen()).toBe('event');
     expect(hasBoard()).toBe(false);
     expect(mainArea().querySelector('.event-text')).toBeTruthy();
@@ -638,9 +638,10 @@ describe('ラン進行とメイン画面の切り替え', () => {
     );
     expect(choose).toHaveLength(2);
     choose[0]!.click();
-    expect(screen()).toBe('nodeTransition');
-    findButton('進む')!.click();
-    // 次は戦闘なので、盤面のある準備画面に戻る
+    // 何が起きたかを見せてから次へ
+    expect(screen()).toBe('result');
+    expect(mainArea().querySelector('.result-block')!.textContent!.length).toBeGreaterThan(0);
+    findButton('次へ')!.click();
     expect(screen()).toBe('prep');
     expect(hasBoard()).toBe(true);
   });
@@ -653,22 +654,51 @@ describe('ラン進行とメイン画面の切り替え', () => {
     seen[screen()] = hasBoard();
     findButton('次へ')!.click();
     seen[screen()] = hasBoard();
-    findButton('進む')!.click();
-    seen[screen()] = hasBoard();
-    expect(seen).toMatchObject({ prep: true, result: false, nodeTransition: false, shop: false });
+    expect(seen).toMatchObject({ prep: true, result: false, shop: false });
   });
 
-  it('ショップ／イベント／リザルト中はタブ操作を止める', () => {
+  it('B2: 戦闘中以外はショップ・イベント・リザルトでもタブを操作できる', () => {
     startRun();
     fightThrough();
     expect(screen()).toBe('result');
     for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
-      expect(tabButton(t).disabled, t).toBe(true);
+      expect(tabButton(t).disabled, t).toBe(false);
     }
+    // リザルト中でも編成タブが開ける
+    openTab('team');
+    expect(tabBody().querySelector('.char-pager')).toBeTruthy();
+
     findButton('次へ')!.click();
-    findButton('進む')!.click();
     expect(screen()).toBe('shop');
-    expect(tabButton('team').disabled).toBe(true);
+    expect(tabButton('team').disabled).toBe(false);
+    openTab('blessing');
+    expect(tabBody()).toBeTruthy();
+  });
+
+  it('B3: ラン中は所持している加護・装備だけが並ぶ', () => {
+    startRun();
+    openTab('blessing');
+    expect(tabBody().textContent).toContain('まだ加護を持っていません');
+    expect(tabBody().querySelectorAll('.blessing-row:not(.inventory-row)').length).toBe(0);
+    expect(tabBody().textContent).toContain('まだ装備を持っていません');
+
+    // 加護と装備を1つずつ持たせる
+    const run = (window as unknown as { __run?: unknown }).__run;
+    expect(run).toBeUndefined(); // 状態は module 内に閉じている
+  });
+
+  it('B4: ラン中は★を直接変えられない（合成だけ）', () => {
+    startRun();
+    openTab('team');
+    expect(card().querySelector('.sandbox-star')).toBeNull();
+    expect(card().querySelector('select')).toBeNull();
+    const merge = [...card().querySelectorAll('button')].find((b) => b.textContent === '合成')!;
+    expect(merge).toBeTruthy();
+    // 同じキャラが2体そろっていないので押せない
+    expect(merge.disabled).toBe(true);
+    const star = card().querySelector('.star-tag')!.textContent;
+    merge.click();
+    expect(card().querySelector('.star-tag')!.textContent).toBe(star);
   });
 
   it('ラン中は編成が「所持キャラ1体」になる', () => {
@@ -729,5 +759,71 @@ describe('戦闘再生中', () => {
     expect(findButton('▶ 再生')).toBeTruthy();
     closeTop();
     expect(findButton('⏸ 一時停止')).toBeTruthy();
+  });
+});
+
+describe('B6 下部バーの高さがタブで変わらない', () => {
+  it('どのタブに切り替えても、外枠に高さを決めるインラインスタイルが付かない', () => {
+    const heights = new Set<string>();
+    for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
+      openTab(t);
+      const bar = app().querySelector('.bottom-bar') as HTMLElement;
+      // 高さは CSS の固定値だけで決まる（JS が都度いじらない）
+      heights.add(`${bar.style.height}|${bar.style.minHeight}|${bar.style.maxHeight}`);
+      expect(bar.className).toBe('bottom-bar');
+    }
+    expect(heights.size).toBe(1);
+    expect([...heights][0]).toBe('||');
+  });
+
+  it('タブを切り替えても .bottom-bar は1つで、構造（タブ行/中身/操作行）が変わらない', () => {
+    for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
+      openTab(t);
+      expect(app().querySelectorAll('.bottom-bar').length, t).toBe(1);
+      const bar = app().querySelector('.bottom-bar')!;
+      expect([...bar.children].map((c) => c.className), t).toEqual([
+        'tab-row',
+        'tab-body',
+        'action-row',
+      ]);
+    }
+  });
+});
+
+describe('B1 イベントの見通しと結果', () => {
+  it('選ぶ前に「何が起こりうるか」が書いてある', () => {
+    openTab('run');
+    findButton('▶ 新しいランを始める')!.click();
+    // 戦闘 → ショップ → イベント まで進める
+    findButton('▶ この戦闘に挑む')!.click();
+    openTab('control');
+    findButton('⏭ スキップ')!.click();
+    findButton('結果へ')!.click();
+    findButton('次へ')!.click();
+    findButton('次へ進む')!.click();
+    findButton('次へ')!.click();
+    expect(screen()).toBe('event');
+
+    const outlooks = [...mainArea().querySelectorAll('.shop-desc')].map((n) => n.textContent ?? '');
+    expect(outlooks).toHaveLength(2);
+    for (const o of outlooks) {
+      expect(o).toMatch(/〈安全〉|〈賭け〉|〈ミニ戦闘〉|〈危険な戦闘〉/);
+      expect(o.length).toBeGreaterThan(4);
+    }
+  });
+});
+
+describe('A3 スキルはランクアップで増える', () => {
+  it('ラン開始時は2つだけ覚えている', () => {
+    openTab('run');
+    findButton('▶ 新しいランを始める')!.click();
+    openTab('team');
+    cardButton('詳細').click();
+    const names = [...topSheet()!.querySelectorAll('.skill:not(.team-row) .skill-name')].map(
+      (n) => n.textContent,
+    );
+    // アクティブ / パッシブ / サポート の3行のうち、中身があるのは2行
+    expect(names).toHaveLength(3);
+    expect(names.filter((n) => n !== 'なし')).toHaveLength(2);
   });
 });

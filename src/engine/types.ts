@@ -268,6 +268,20 @@ export interface EffectDef {
 // データ定義
 // ---------------------------------------------------------------------------
 
+/** スキルの種別 */
+export type SkillKind = 'active' | 'passive' | 'support';
+
+/**
+ * キャラが覚えられるスキル1つ。
+ * 初期に持つのは「アクティブ or パッシブ」から1つ＋「サポート」1つだけで、
+ * 残りは★が上がる（＝合成する）たびに3択から1つ選んで覚える。
+ */
+export interface SkillDef {
+  id: string;
+  kind: SkillKind;
+  def: EffectDef;
+}
+
 export interface CharacterDef {
   id: string;
   name: string;
@@ -278,12 +292,10 @@ export interface CharacterDef {
   element: Element;
   tier: 1 | 2 | 3;
   base: Stats;
-  /** アクティブスキル（マナ最大で発動） */
-  active: EffectDef;
-  /** パッシブ（盤上にいる間） */
-  passives: EffectDef[];
-  /** サポート枠に置いた時だけ働く効果 */
-  support: EffectDef[];
+  /** 覚えられるスキルの全体（初期スキルを含む） */
+  skills: SkillDef[];
+  /** 最初から持っているスキルID（アクティブ or パッシブ から1つ ＋ サポート1つ） */
+  initialSkills: string[];
 }
 
 export interface EnemyDef {
@@ -314,10 +326,17 @@ export interface BuildMod {
   value: number;
 }
 
+/** 装備のレア度（★1〜★3相当） */
+export type EquipTier = 1 | 2 | 3;
+
 export interface EquipmentDef {
   id: string;
   name: string;
   desc: string;
+  /** レア度（★1〜★3相当） */
+  tier: EquipTier;
+  /** 属性特化の装備（省略すると属性を問わない汎用） */
+  element?: Element;
   /** 固定値の加算 */
   flat?: Partial<Stats>;
   /** 割合補正（1 + Σ%） */
@@ -369,6 +388,8 @@ export interface LoadoutEntry {
   star: Star;
   /** 装備。スロット数は★の数と同じ（equipmentSlots(star)）。超えた分は無視される */
   equipment: string[];
+  /** 覚えているスキルID。省略すると ★に応じた既定の構成になる */
+  skills?: string[];
   /** 前衛の場合の配置 */
   pos?: Hex;
 }

@@ -31,9 +31,9 @@ export interface RunConfig {
     equipment: number;
     sixthSlot: number;
     promotion: number;
-    /** リロールの基本コスト */
+    /** そのショップでの1回目のリロール価格 */
     reroll: number;
-    /** リロールするたびに増える額 */
+    /** リロールするたびに増える額（1回目1c・2回目2c…） */
     rerollStep: number;
   };
 
@@ -72,7 +72,7 @@ export const DEFAULT_RUN_CONFIG: RunConfig = {
     equipment: 3,
     sixthSlot: 8,
     promotion: 8,
-    reroll: 3,
+    reroll: 1,
     rerollStep: 1,
   },
 

@@ -3,7 +3,7 @@
  */
 
 import { getBlessing } from '../data/blessings';
-import { getCharacter } from '../data/characters';
+import { defaultSkills, expandSkillEffects, getCharacter, getSkill } from '../data/characters';
 import { getEnemy } from '../data/enemies';
 import { getEquipment } from '../data/equipment';
 import type { BattleSetup, BattleUnitSpec, TeamEffect } from './battle';
@@ -26,6 +26,13 @@ import type {
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
+}
+
+/** そのメンバーが覚えているスキルID（未指定なら★に応じた既定の構成） */
+export function learnedSkills(entry: LoadoutEntry): string[] {
+  return entry.skills && entry.skills.length > 0
+    ? entry.skills
+    : defaultSkills(entry.charId, entry.star);
 }
 
 /**
@@ -98,11 +105,14 @@ export function buildBattleSetup(
     const equipment = effectiveEquipment(m.entry);
     const effects: { def: EffectDef; origin: string }[] = [];
 
-    if (m.slot === 'frontline') {
-      effects.push({ def: c.active, origin: 'active' });
-      for (const p of c.passives) effects.push({ def: p, origin: 'passive' });
-    } else {
-      for (const s of c.support) effects.push({ def: s, origin: 'support' });
+    // 覚えているスキルだけが働く。盤上ではアクティブ＋パッシブ、サポート枠ではサポートだけ
+    for (const skillId of learnedSkills(m.entry)) {
+      const sk = getSkill(c.id, skillId);
+      const onField = m.slot === 'frontline';
+      if (onField ? sk.kind === 'support' : sk.kind !== 'support') continue;
+      for (const def of expandSkillEffects(c.id, skillId)) {
+        effects.push({ def, origin: sk.kind });
+      }
     }
     for (const eq of equipment) {
       for (const e of eq.effects ?? []) effects.push({ def: e, origin: 'equipment' });

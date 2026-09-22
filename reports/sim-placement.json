@@ -15,49 +15,49 @@
       "wins": 2184,
       "winRate": 100,
       "inBand": false,
-      "bestPlacement": "0,3 / 1,4 / 3,5",
+      "bestPlacement": "0,3 / 2,3 / 3,3",
       "worstPlacement": null,
-      "avgDuration": 2.78
+      "avgDuration": 2.82
     },
     {
       "encounter": "E2",
       "placements": 2184,
-      "wins": 1608,
-      "winRate": 73.6,
+      "wins": 1282,
+      "winRate": 58.7,
       "inBand": true,
-      "bestPlacement": "4,5 / 3,3 / 0,5",
-      "worstPlacement": "0,3 / 2,3 / 4,3",
-      "avgDuration": 20.31
+      "bestPlacement": "3,3 / 0,3 / 2,4",
+      "worstPlacement": "0,3 / 1,3 / 3,3",
+      "avgDuration": 20.72
     },
     {
       "encounter": "E3",
       "placements": 2184,
-      "wins": 1426,
-      "winRate": 65.3,
+      "wins": 1097,
+      "winRate": 50.2,
       "inBand": true,
-      "bestPlacement": "2,4 / 0,5 / 1,5",
+      "bestPlacement": "0,5 / 1,4 / 2,4",
       "worstPlacement": "0,3 / 1,3 / 3,3",
-      "avgDuration": 19.62
+      "avgDuration": 19.42
     },
     {
       "encounter": "E4",
       "placements": 2184,
-      "wins": 1051,
-      "winRate": 48.1,
+      "wins": 1724,
+      "winRate": 78.9,
       "inBand": true,
-      "bestPlacement": "2,4 / 1,3 / 0,5",
-      "worstPlacement": "0,3 / 1,3 / 2,3",
+      "bestPlacement": "4,3 / 0,3 / 1,3",
+      "worstPlacement": "1,3 / 0,3 / 2,3",
       "avgDuration": 26.92
     },
     {
       "encounter": "B1",
       "placements": 2184,
-      "wins": 1265,
-      "winRate": 57.9,
+      "wins": 609,
+      "winRate": 27.9,
       "inBand": true,
-      "bestPlacement": "4,4 / 3,5 / 0,5",
+      "bestPlacement": "2,4 / 0,3 / 1,3",
       "worstPlacement": "0,3 / 1,3 / 2,3",
-      "avgDuration": 32.9
+      "avgDuration": 31.95
     }
   ],
   "encountersInBand": 4,

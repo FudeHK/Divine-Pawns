@@ -233,8 +233,9 @@ describe('決定論', () => {
   it('シードが違えば（麻痺の判定が絡む戦闘では）結果が変わりうる', () => {
     const lo: Loadout = {
       frontline: [
-        { charId: 'GRE_B', star: 1, equipment: [], pos: { x: 2, y: 5 } },
-        { charId: 'JPN_B', star: 1, equipment: [], pos: { x: 2, y: 4 } },
+        // 麻痺を撒くスキルを明示的に覚えさせる（初期構成には入っていない）
+        { charId: 'GRE_B', star: 1, skills: ['GRE_B_a1', 'GRE_B_s1'], equipment: [], pos: { x: 2, y: 5 } },
+        { charId: 'JPN_B', star: 2, skills: ['JPN_B_a1', 'JPN_B_s1', 'JPN_B_p1'], equipment: [], pos: { x: 2, y: 4 } },
         { charId: 'GRE_A', star: 1, equipment: [], pos: { x: 2, y: 3 } },
       ],
       support: [],

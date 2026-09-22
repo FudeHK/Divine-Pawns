@@ -73,13 +73,15 @@ describe('ステータス計算の順序', () => {
   const flatEq: EquipmentDef = {
     id: 'test_flat',
     name: '固定値',
-    desc: '',
+    desc: 'テスト用',
+    tier: 1,
     flat: { atk: 25 },
   };
   const pctEq: EquipmentDef = {
     id: 'test_pct',
     name: '割合',
-    desc: '',
+    desc: 'テスト用',
+    tier: 1,
     pct: { atk: 0.1 },
   };
 
@@ -93,7 +95,8 @@ describe('ステータス計算の順序', () => {
     const pctEq2: EquipmentDef = {
       id: 'test_pct2',
       name: '割合2',
-      desc: '',
+      desc: 'テスト用',
+      tier: 1,
       pct: { atk: 0.2 },
     };
     // 100 → +0 → × (1 + 0.1 + 0.2) = 130（1.1 × 1.2 = 132 にはならない）
