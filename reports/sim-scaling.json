@@ -3,61 +3,61 @@
   "builds": [
     {
       "name": "基準（★1・装備なし・加護なし）",
-      "dummyDps": 236.2,
-      "dummyFireDps": 205.8,
+      "dummyDps": 221.6,
+      "dummyFireDps": 192.7,
       "dummyDpsByElement": {
-        "fire": 205.8,
-        "ice": 30.4,
+        "fire": 192.7,
+        "ice": 28.9,
         "wood": 0,
         "lightning": 0
       },
-      "winRate": 100,
+      "winRate": 83.3,
       "perEncounter": [
         {
           "encounter": "E0",
-          "dps": 2570,
+          "dps": 2441.5,
           "win": true,
           "duration": 0.1
         },
         {
           "encounter": "E1",
-          "dps": 225.9,
+          "dps": 214.6,
           "win": true,
           "duration": 2.9
         },
         {
           "encounter": "E2",
-          "dps": 197.8,
+          "dps": 185,
           "win": true,
           "duration": 18.2
         },
         {
           "encounter": "E3",
-          "dps": 153,
-          "win": true,
-          "duration": 20.5
+          "dps": 121.3,
+          "win": false,
+          "duration": 25.3
         },
         {
           "encounter": "E4",
-          "dps": 192.5,
+          "dps": 182.1,
           "win": true,
-          "duration": 22
+          "duration": 22.1
         },
         {
           "encounter": "B1",
-          "dps": 148.9,
+          "dps": 158.7,
           "win": true,
-          "duration": 33.7
+          "duration": 28.5
         }
       ]
     },
     {
       "name": "燃焼ビルド（★3・装備あり・業火の加護・炎サポート）",
-      "dummyDps": 1164.1,
-      "dummyFireDps": 1070.8,
+      "dummyDps": 2036.8,
+      "dummyFireDps": 1892.8,
       "dummyDpsByElement": {
-        "fire": 1070.8,
-        "ice": 93.3,
+        "fire": 1892.8,
+        "ice": 144,
         "wood": 0,
         "lightning": 0
       },
@@ -65,43 +65,43 @@
       "perEncounter": [
         {
           "encounter": "E0",
-          "dps": 3460.4,
+          "dps": 5197.5,
           "win": true,
           "duration": 0.1
         },
         {
           "encounter": "E1",
-          "dps": 870.6,
+          "dps": 6804.7,
           "win": true,
-          "duration": 1.3
+          "duration": 0.1
         },
         {
           "encounter": "E2",
-          "dps": 644.4,
+          "dps": 1042.2,
           "win": true,
-          "duration": 6.4
+          "duration": 3.3
         },
         {
           "encounter": "E3",
-          "dps": 679.9,
+          "dps": 919.6,
           "win": true,
-          "duration": 5
+          "duration": 4.5
         },
         {
           "encounter": "E4",
-          "dps": 604.6,
+          "dps": 942.8,
           "win": true,
-          "duration": 7.3
+          "duration": 4.6
         },
         {
           "encounter": "B1",
-          "dps": 709.4,
+          "dps": 794.2,
           "win": true,
-          "duration": 8.6
+          "duration": 6.4
         }
       ]
     }
   ],
-  "maxDpsRatio": 4.93,
-  "fireDpsRatio": 5.2
+  "maxDpsRatio": 9.19,
+  "fireDpsRatio": 9.82
 }

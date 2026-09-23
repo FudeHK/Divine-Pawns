@@ -61,7 +61,7 @@ describe('サポート枠', () => {
 
   it('サポート効果の効果量は、装備込みの最終ステータスを参照する', () => {
     // GRE_A のサポート効果：開幕、前衛全員に「自分の最大HP × 10%」のシールド
-    const baseHp = getCharacter('GRE_A').base.maxHp;
+    const baseHp = getCharacter('GRE_A').base.maxHp * DEFAULT_CONFIG.starStatMul[1];
     expect(openingShield(loadoutWith([]))).toBeCloseTo(baseHp * 0.1, 6);
     // タフネス系（HP +350）を持たせると、シールド量も 35 増える
     expect(openingShield(loadoutWith(['eq_tough']))).toBeCloseTo((baseHp + 350) * 0.1, 6);
@@ -70,7 +70,7 @@ describe('サポート枠', () => {
   it('サポート効果の効果量は、加護込みの最終ステータスも参照する', () => {
     // 多彩な加護（属性がすべて異なる時、全体の HP +15%）
     // 編成は NOR_A(炎) / EGY_B(木) / GRE_A(氷) で属性がすべて異なる
-    const baseHp = getCharacter('GRE_A').base.maxHp;
+    const baseHp = getCharacter('GRE_A').base.maxHp * DEFAULT_CONFIG.starStatMul[1];
     const withBless = openingShield(loadoutWith([], ['bl_variety']));
     expect(withBless).toBeCloseTo(baseHp * 1.15 * 0.1, 6);
   });
@@ -104,7 +104,10 @@ describe('サポート枠', () => {
       support: [{ charId: 'GRE_A', star: 1, equipment: [] }],
       blessings: ['bl_variety'],
     };
-    expect(openingShield(dup)).toBeCloseTo(getCharacter('GRE_A').base.maxHp * 0.1, 6);
+    expect(openingShield(dup)).toBeCloseTo(
+      getCharacter('GRE_A').base.maxHp * DEFAULT_CONFIG.starStatMul[1] * 0.1,
+      6,
+    );
   });
 
   it('サポート枠のキャラはアクティブ・パッシブを使わない', () => {

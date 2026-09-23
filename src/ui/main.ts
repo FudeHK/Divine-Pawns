@@ -150,6 +150,8 @@ const state = {
     tone: 'win' | 'lose' | 'neutral';
     title: string;
     lines: string[];
+    /** 同じ戦闘に再挑戦する状態か */
+    retry?: boolean;
   } | null,
   /** 「編成」タブで今表示しているメンバーの番号 */
   cardIndex: 0,
@@ -882,6 +884,7 @@ function applyRunBattleResult(): void {
   const rep = state.replay;
   if (!run || !rep) return;
   const won = rep.outcome === 'win';
+  let retry = false;
   if (state.battleContext === 'runEvent') {
     const out = resolveEventBattle(run, won, runCfg);
     state.runMessage = `${out.text} ${out.changes.join(' / ')}`;
@@ -891,28 +894,38 @@ function applyRunBattleResult(): void {
       ? `勝利。コイン +${res.coinsGained}`
       : res.gameOver
         ? 'ライフが尽きた……'
-        : res.bossRetry
-          ? '敗北。ライフ -1。章ボスに再挑戦できる'
-          : `敗北。ライフ -1・救援コイン +${res.coinsGained}`;
+        : `ライフ -1 ／ コイン +${res.coinsGained} ／ 同じ相手に再挑戦`;
+    retry = res.retry;
   }
   autoSave();
   state.pendingResult = false;
   state.replay = null;
   state.playing = false;
   state.frame = 0;
-  showResult(won ? 'win' : 'lose', won ? '勝利！' : '敗北…', [state.runMessage]);
+  showResult(won ? 'win' : 'lose', won ? '勝利！' : '敗北…', [state.runMessage], retry);
 }
 
 /** 結果を1画面にまとめて出す（戦闘・イベント共通） */
-function showResult(tone: 'win' | 'lose' | 'neutral', title: string, lines: string[]): void {
+function showResult(
+  tone: 'win' | 'lose' | 'neutral',
+  title: string,
+  lines: string[],
+  retry = false,
+): void {
   const run = state.run;
   let next = '';
-  if (run && run.phase === 'node') {
+  if (retry) next = '';
+  else if (run && run.phase === 'node') {
     const node = currentNode(run, runCfg);
     next = node ? `次は「${NODE_LABEL[node.kind]}」` : '';
   } else if (run?.phase === 'clear') next = 'ランをクリアした';
   else if (run?.phase === 'gameover') next = 'ランはここまで';
-  state.resultInfo = { tone, title, lines: [...lines.filter(Boolean), next].filter(Boolean) };
+  state.resultInfo = {
+    tone,
+    title,
+    lines: [...lines.filter(Boolean), next].filter(Boolean),
+    retry,
+  };
   setScreen('result');
   render();
 }
@@ -1292,13 +1305,19 @@ function renderTeamTab(body: HTMLElement): void {
   );
 
   // 1行目: 名前・属性・役割・ID・★（タップ対象ではないので低い）
+  // 1行目: 名前だけ（長い名前は「…」で切らず、1段小さくして収める）
   const head = h('div', 'char-head');
-  head.appendChild(h('div', 'char-name', c.name));
-  head.appendChild(h('span', 'tag star-tag', `★${m.star}`));
-  head.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
-  head.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
-  head.appendChild(h('span', 'char-id', c.id));
+  const nameEl = h('div', 'char-name' + (c.name.length >= 11 ? ' long' : ''), c.name);
+  head.appendChild(nameEl);
   card.appendChild(head);
+
+  // 2行目: ★・属性・役割・ID
+  const tags = h('div', 'char-tags');
+  tags.appendChild(h('span', 'tag star-tag', `★${m.star}`));
+  tags.appendChild(h('span', `tag el-${c.element}`, ELEMENT_LABEL[c.element]));
+  tags.appendChild(h('span', 'tag', ROLE_LABEL[c.role]));
+  tags.appendChild(h('span', 'char-id', c.id));
+  card.appendChild(tags);
 
   // 2行目: 配置状態＋簡易ステータス
   const line2 = h('div', 'char-line2');
@@ -1548,7 +1567,7 @@ function renderResultScreen(main: HTMLElement): void {
   for (const line of info?.lines ?? []) block.appendChild(h('div', 'screen-text', line));
   panel.appendChild(block);
   if (run) panel.appendChild(runHeader(run));
-  panel.appendChild(btn('次へ', false, afterResult, 'next-btn'));
+  panel.appendChild(btn(info?.retry ? '再挑戦' : '次へ', false, afterResult, 'next-btn'));
   main.appendChild(panel);
 }
 
@@ -1755,7 +1774,7 @@ function renderRunTab(body: HTMLElement): void {
     const node = currentNode(run, runCfg)!;
     body.appendChild(h('div', 'hint', `いまのノード: ${NODE_LABEL[node.kind]}`));
     if (run.bossRetries > 0) {
-      body.appendChild(h('div', 'hint err', `章ボスに再挑戦（${run.bossRetries}回目）`));
+      body.appendChild(h('div', 'hint err', `同じ戦闘に再挑戦（${run.bossRetries}回目）`));
     }
   } else {
     body.appendChild(h('div', 'hint', run.phase === 'clear' ? 'クリア済み' : 'ゲームオーバー'));

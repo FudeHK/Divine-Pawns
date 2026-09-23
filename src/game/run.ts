@@ -186,8 +186,8 @@ export function advanceNode(run: RunState, cfg: RunConfig = DEFAULT_RUN_CONFIG):
 // ---------------------------------------------------------------------------
 
 export interface BattleResolution {
-  /** 章ボスに負けて、同じボスに再挑戦できる状態か */
-  bossRetry: boolean;
+  /** 負けて、同じ戦闘に再挑戦する状態か（章ボスも通常戦も同じ扱い） */
+  retry: boolean;
   gameOver: boolean;
   coinsGained: number;
   lifeLost: number;
@@ -196,8 +196,8 @@ export interface BattleResolution {
 /**
  * 戦闘の勝敗を反映する。
  * - 勝ち: コインを得て、次のノード（リザルト兼ショップ）へ
- * - 負け: ライフ-1・救援コイン。ライフ0でゲームオーバー。
- *   章ボスに負けた時だけ、同じボスへの再挑戦になる（ライフは消費する）
+ * - 負け: ライフ-1・救援コイン。ノードは進めず、同じ相手に再挑戦する。
+ *   ライフが0になったらゲームオーバー。
  */
 export function applyBattleResult(
   run: RunState,
@@ -213,7 +213,7 @@ export function applyBattleResult(
     run.coins += gain;
     run.bossRetries = 0;
     advanceNode(run, cfg);
-    return { bossRetry: false, gameOver: false, coinsGained: gain, lifeLost: 0 };
+    return { retry: false, gameOver: false, coinsGained: gain, lifeLost: 0 };
   }
 
   run.life -= 1;
@@ -223,16 +223,11 @@ export function applyBattleResult(
     run.phase = 'gameover';
     run.shop = null;
     run.eventId = null;
-    return { bossRetry: false, gameOver: true, coinsGained: cfg.coinsLose, lifeLost: 1 };
+    return { retry: false, gameOver: true, coinsGained: cfg.coinsLose, lifeLost: 1 };
   }
-  if (isBoss) {
-    // 同じボスに再挑戦（ノードは進めない）
-    run.bossRetries += 1;
-    return { bossRetry: true, gameOver: false, coinsGained: cfg.coinsLose, lifeLost: 1 };
-  }
-  // 通常戦の敗北でもショップは使える
-  advanceNode(run, cfg);
-  return { bossRetry: false, gameOver: false, coinsGained: cfg.coinsLose, lifeLost: 1 };
+  // 章ボスでも通常戦でも、ノードは進めずに同じ相手へ再挑戦する
+  run.bossRetries += 1;
+  return { retry: true, gameOver: false, coinsGained: cfg.coinsLose, lifeLost: 1 };
 }
 
 // ---------------------------------------------------------------------------
@@ -795,7 +790,8 @@ export function runEncounter(
   cfg: RunConfig = DEFAULT_RUN_CONFIG,
 ): EncounterDef {
   const base = getEncounter(encounterId);
-  const mul = cfg.chapterScale[run.chapter] ?? 1;
+  const boss = encounterId === BOSS_ENCOUNTER;
+  const mul = (cfg.chapterScale[run.chapter] ?? 1) * (boss ? (cfg.bossScale[run.chapter] ?? 1) : 1);
   if (mul === 1) return base;
   return {
     ...base,

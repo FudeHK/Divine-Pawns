@@ -18,7 +18,7 @@ export interface RunConfig {
   coinsWin: number;
   /** 章ボスに勝った時のコイン */
   coinsBossWin: number;
-  /** 負けた時の救援コイン */
+  /** 負けた時の救援コイン（再挑戦の前に買い足せる程度） */
   coinsLose: number;
 
   /** 売却は購入額の何割か */
@@ -71,6 +71,9 @@ export interface RunConfig {
    * ラン全体の難易度カーブはここで作る。
    */
   chapterScale: Record<number, number>;
+
+  /** 章ボスだけに追加で掛かる強さ倍率（章ボスを「関門」にする） */
+  bossScale: Record<number, number>;
 }
 
 export const DEFAULT_RUN_CONFIG: RunConfig = {
@@ -82,7 +85,7 @@ export const DEFAULT_RUN_CONFIG: RunConfig = {
 
   coinsWin: 5,
   coinsBossWin: 12,
-  coinsLose: 2,
+  coinsLose: 4,
 
   sellRate: 0.5,
 
@@ -114,7 +117,8 @@ export const DEFAULT_RUN_CONFIG: RunConfig = {
 
   eventSlotRewardChance: 0.25,
 
-  chapterScale: { 1: 0.5, 2: 0.72, 3: 0.92 },
+  chapterScale: { 1: 0.5, 2: 2.3, 3: 3.8 },
+  bossScale: { 1: 1.35, 2: 1.35, 3: 1.35 },
 };
 
 export function cloneRunConfig(base: RunConfig = DEFAULT_RUN_CONFIG): RunConfig {

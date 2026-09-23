@@ -12,9 +12,9 @@ export const LAYOUT = {
   /** 要素間の標準の隙間 */
   gap: 8,
   /** #app の内側の余白（上下それぞれ） */
-  appPadding: 8,
+  appPadding: 6,
   /** #app の子要素どうしの隙間 */
-  appGap: 6,
+  appGap: 4,
   /** 画面上部の見出し行 */
   headerHeight: 30,
   /**
@@ -22,11 +22,11 @@ export const LAYOUT = {
    * 「編成」タブ（いちばん縦を要する）の実コンテンツ高さ＋余白から決めている。
    * どのタブでもこの高さで、余る分は中身の余白、足りない分は内部スクロールで吸収する。
    */
-  barHeight: 292,
+  barHeight: 320,
   /** 下部バーの内側の余白（上下それぞれ） */
   barPadding: 8,
   /** 盤面が潰れないための最小の高さ */
-  boardMinHeight: 160,
+  boardMinHeight: 140,
 
   /** キャラカードの内側の余白（上下それぞれ） */
   cardPadding: 6,
@@ -35,8 +35,10 @@ export const LAYOUT = {
   /** カード内の行どうしの隙間 */
   cardRowGap: 4,
 
-  /** 1行目: 名前＋属性・役割チップ（タップ対象ではないので低くてよい） */
-  rowNameHeight: 30,
+  /** 1行目: 名前だけ（省略記号を出さないために独立させた） */
+  rowNameHeight: 26,
+  /** 2行目: ★・属性・役割・ID のチップ行 */
+  rowTagsHeight: 24,
   /** 2行目: 状態表示＋簡易ステータス */
   rowStateHeight: 26,
   /** 3行目: 操作ボタン（タップ領域） */
@@ -48,10 +50,14 @@ export const LAYOUT = {
   hintHeight: 20,
 } as const;
 
-/** キャラカード1枚の高さ（名前 / 状態＋ステータス / 操作 の3行） */
+/** キャラカード1枚の高さ（名前 / チップ / 状態＋ステータス / 操作 の4行） */
 export function teamCardHeight(): number {
   const rows =
-    LAYOUT.rowNameHeight + LAYOUT.rowStateHeight + LAYOUT.rowActionHeight + LAYOUT.cardRowGap * 2;
+    LAYOUT.rowNameHeight +
+    LAYOUT.rowTagsHeight +
+    LAYOUT.rowStateHeight +
+    LAYOUT.rowActionHeight +
+    LAYOUT.cardRowGap * 3;
   return rows + LAYOUT.cardPadding * 2 + LAYOUT.cardBorder;
 }
 

@@ -26,9 +26,9 @@ const raw: EncounterDef[] = [
     id: 'E2',
     name: '通常戦 2（前衛2体＋射手）',
     units: [
-      { enemyId: 'en_soldier', pos: { x: 2, y: 2 }, scale: 1.2 },
-      { enemyId: 'en_soldier', pos: { x: 0, y: 2 }, scale: 1.2 },
-      { enemyId: 'en_archer', pos: { x: 2, y: 0 }, scale: 1.2 },
+      { enemyId: 'en_soldier', pos: { x: 2, y: 2 }, scale: 1.12 },
+      { enemyId: 'en_soldier', pos: { x: 0, y: 2 }, scale: 1.12 },
+      { enemyId: 'en_archer', pos: { x: 2, y: 0 }, scale: 1.12 },
     ],
   },
   {
@@ -55,10 +55,10 @@ const raw: EncounterDef[] = [
     id: 'B1',
     name: 'ボス戦（取り巻き付き）',
     units: [
-      { enemyId: 'boss_colossus', pos: { x: 2, y: 2 }, scale: 1.0 },
-      { enemyId: 'en_soldier', pos: { x: 0, y: 2 }, scale: 0.56 },
-      { enemyId: 'en_soldier', pos: { x: 4, y: 2 }, scale: 0.56 },
-      { enemyId: 'en_shaman', pos: { x: 2, y: 0 }, scale: 0.56 },
+      { enemyId: 'boss_colossus', pos: { x: 2, y: 2 }, scale: 0.9 },
+      { enemyId: 'en_soldier', pos: { x: 0, y: 2 }, scale: 0.5 },
+      { enemyId: 'en_soldier', pos: { x: 4, y: 2 }, scale: 0.5 },
+      { enemyId: 'en_shaman', pos: { x: 2, y: 0 }, scale: 0.5 },
     ],
   },
 ];

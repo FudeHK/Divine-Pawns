@@ -45,19 +45,27 @@ describe('ダメージ式', () => {
 });
 
 describe('★倍率', () => {
-  it('HP・攻撃力の倍率は ★2 で ×1.8、★3 で ×3.24', () => {
-    expect(DEFAULT_CONFIG.starStatMul[1]).toBe(1);
-    expect(DEFAULT_CONFIG.starStatMul[2]).toBe(1.8);
-    expect(DEFAULT_CONFIG.starStatMul[3]).toBe(3.24);
+  it('HP・攻撃力の倍率は ★1 で ×0.95、★2 で ×2.1、★3 で ×5.0', () => {
+    expect(DEFAULT_CONFIG.starStatMul[1]).toBe(0.95);
+    expect(DEFAULT_CONFIG.starStatMul[2]).toBe(2.1);
+    expect(DEFAULT_CONFIG.starStatMul[3]).toBe(5.0);
 
-    expect(buildStats({ base, star: 2, equipment: [] }).atk).toBeCloseTo(180, 10);
-    expect(buildStats({ base, star: 3, equipment: [] }).maxHp).toBeCloseTo(3240, 10);
+    expect(buildStats({ base, star: 2, equipment: [] }).atk).toBeCloseTo(210, 10);
+    expect(buildStats({ base, star: 3, equipment: [] }).maxHp).toBeCloseTo(5000, 10);
   });
 
-  it('スキル係数の倍率は ★2 で ×1.5、★3 で ×2.25', () => {
-    expect(skillStarMul(1)).toBe(1);
-    expect(skillStarMul(2)).toBe(1.5);
-    expect(skillStarMul(3)).toBe(2.25);
+  it('★が上がるほど伸びが大きくなる（★1→★2 より ★2→★3）', () => {
+    const m = DEFAULT_CONFIG.starStatMul;
+    expect(m[2] / m[1]).toBeGreaterThan(2);
+    expect(m[3] / m[2]).toBeGreaterThan(m[2] / m[1]);
+    const k = DEFAULT_CONFIG.starSkillMul;
+    expect(k[3] / k[2]).toBeGreaterThanOrEqual(k[2] / k[1] - 1e-9);
+  });
+
+  it('スキル係数の倍率は ★1 で ×0.9、★2 で ×1.85、★3 で ×3.9', () => {
+    expect(skillStarMul(1)).toBe(0.9);
+    expect(skillStarMul(2)).toBe(1.85);
+    expect(skillStarMul(3)).toBe(3.9);
   });
 
   it('★倍率は HP と攻撃力にだけ乗る', () => {
@@ -86,9 +94,9 @@ describe('ステータス計算の順序', () => {
   };
 
   it('基本値 × ★倍率 → 固定値を加算 → 割合を乗算', () => {
-    // 100 × 1.8 = 180 → +25 = 205 → × 1.1 = 225.5
+    // 100 × 2.1 = 210 → +25 = 235 → × 1.1 = 258.5
     const s = buildStats({ base, star: 2, equipment: [flatEq, pctEq] });
-    expect(s.atk).toBeCloseTo(225.5, 10);
+    expect(s.atk).toBeCloseTo(258.5, 10);
   });
 
   it('割合補正は合計してから1回だけ乗算する（1 + Σ%）', () => {
@@ -99,24 +107,24 @@ describe('ステータス計算の順序', () => {
       tier: 1,
       pct: { atk: 0.2 },
     };
-    // 100 → +0 → × (1 + 0.1 + 0.2) = 130（1.1 × 1.2 = 132 にはならない）
+    // 100 × 0.95 = 95 → × (1 + 0.1 + 0.2) = 123.5（1.1 × 1.2 倍にはならない）
     const s = buildStats({ base, star: 1, equipment: [pctEq, pctEq2] });
-    expect(s.atk).toBeCloseTo(130, 10);
-    expect(s.atk).not.toBeCloseTo(132, 6);
+    expect(s.atk).toBeCloseTo(123.5, 10);
+    expect(s.atk).not.toBeCloseTo(95 * 1.1 * 1.2, 6);
   });
 
   it('装備の固定値は ★倍率のあとに足す（★倍率は装備分に乗らない）', () => {
     const s = buildStats({ base, star: 3, equipment: [flatEq] });
-    // 100 × 3.24 = 324 → +25 = 349（(100+25) × 3.24 = 405 ではない）
-    expect(s.atk).toBeCloseTo(349, 10);
+    // 100 × 5.0 = 500 → +25 = 525（(100+25) × 5.0 ではない）
+    expect(s.atk).toBeCloseTo(525, 10);
   });
 
   it('実データの装備でも順序が守られる', () => {
     const power = getEquipment('eq_power');
     const tough = getEquipment('eq_tough');
     const s = buildStats({ base, star: 2, equipment: [power, tough] });
-    expect(s.atk).toBeCloseTo(100 * 1.8 + 25, 10);
-    expect(s.maxHp).toBeCloseTo(1000 * 1.8 + 350, 10);
+    expect(s.atk).toBeCloseTo(100 * 2.1 + 25, 10);
+    expect(s.maxHp).toBeCloseTo(1000 * 2.1 + 350, 10);
   });
 });
 
@@ -133,7 +141,7 @@ describe('加護の編成補正', () => {
     expect(forLightning).toHaveLength(1);
     expect(forFire).toHaveLength(0);
     expect(buildStats({ base, star: 1, equipment: [], extraMods: forLightning }).atk)
-      .toBeCloseTo(110, 10);
+      .toBeCloseTo(100 * DEFAULT_CONFIG.starStatMul[1] * 1.1, 10);
   });
 
   it('多彩な加護は属性がすべて異なる時だけ HP +15%', () => {

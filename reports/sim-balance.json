@@ -1,9 +1,9 @@
 {
   "loadouts": 1000,
   "battles": 6000,
-  "avgDuration": 12.17,
+  "avgDuration": 10.99,
   "timeoutRate": 0,
-  "overallWinRate": 94.57,
+  "overallWinRate": 95.97,
   "perEncounter": [
     {
       "encounter": "E0",
@@ -11,47 +11,47 @@
       "winRate": 100,
       "avgDuration": 0.36,
       "timeoutRate": 0,
-      "avgAllyDps": 1616.3
+      "avgAllyDps": 1743.9
     },
     {
       "encounter": "E1",
       "battles": 1000,
       "winRate": 100,
-      "avgDuration": 2.08,
+      "avgDuration": 1.99,
       "timeoutRate": 0,
-      "avgAllyDps": 357
+      "avgAllyDps": 428.7
     },
     {
       "encounter": "E2",
       "battles": 1000,
-      "winRate": 90,
-      "avgDuration": 15.57,
+      "winRate": 93.6,
+      "avgDuration": 13.75,
       "timeoutRate": 0,
-      "avgAllyDps": 269.2
+      "avgAllyDps": 297.6
     },
     {
       "encounter": "E3",
       "battles": 1000,
-      "winRate": 93.9,
-      "avgDuration": 13.56,
+      "winRate": 93.6,
+      "avgDuration": 12.89,
       "timeoutRate": 0,
-      "avgAllyDps": 285.3
+      "avgAllyDps": 311.5
     },
     {
       "encounter": "E4",
       "battles": 1000,
-      "winRate": 94,
-      "avgDuration": 17.97,
+      "winRate": 93.6,
+      "avgDuration": 17.04,
       "timeoutRate": 0,
-      "avgAllyDps": 277.3
+      "avgAllyDps": 308.1
     },
     {
       "encounter": "B1",
       "battles": 1000,
-      "winRate": 89.5,
-      "avgDuration": 23.51,
+      "winRate": 95,
+      "avgDuration": 19.91,
       "timeoutRate": 0,
-      "avgAllyDps": 256.9
+      "avgAllyDps": 291.7
     }
   ],
   "buildScenarios": [
@@ -59,45 +59,45 @@
       "style": "elite",
       "label": "少数精鋭（前衛2・サポート1に集中投資）",
       "runs": 200,
-      "clears": 109,
-      "clearRate": 54.5,
-      "avgReachedChapter": 2.16,
-      "avgBattleWinRate": 65.7,
-      "avgRoster": 1.9,
-      "avgMaxStar": 2.1
+      "clears": 25,
+      "clearRate": 12.5,
+      "avgReachedChapter": 1.62,
+      "avgBattleWinRate": 45.9,
+      "avgRoster": 1.54,
+      "avgMaxStar": 1.71
     },
     {
       "style": "wide",
       "label": "多キャラ（枠いっぱいに広く編成）",
       "runs": 200,
-      "clears": 185,
-      "clearRate": 92.5,
-      "avgReachedChapter": 2.85,
-      "avgBattleWinRate": 94.2,
-      "avgRoster": 6.63,
-      "avgMaxStar": 2.86
+      "clears": 23,
+      "clearRate": 11.5,
+      "avgReachedChapter": 2.04,
+      "avgBattleWinRate": 54,
+      "avgRoster": 4.66,
+      "avgMaxStar": 2.09
     }
   ],
   "dpsByElement": [
     {
       "element": "fire",
-      "avgDps": 298.4,
-      "share": 35.8
+      "avgDps": 332.1,
+      "share": 36
     },
     {
       "element": "ice",
-      "avgDps": 124.8,
-      "share": 14.8
+      "avgDps": 136.2,
+      "share": 14.6
     },
     {
       "element": "wood",
-      "avgDps": 107.5,
-      "share": 12.2
+      "avgDps": 117.9,
+      "share": 12.1
     },
     {
       "element": "lightning",
-      "avgDps": 298.8,
-      "share": 37.2
+      "avgDps": 331.3,
+      "share": 37.3
     }
   ]
 }

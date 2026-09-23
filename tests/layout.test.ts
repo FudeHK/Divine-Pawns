@@ -54,6 +54,7 @@ describe('レイアウト定数と CSS が一致している', () => {
 
   it('カードの各行の高さが同じ', () => {
     expect(pxOf('.char-head', 'height')).toBe(LAYOUT.rowNameHeight);
+    expect(pxOf('.char-tags', 'height')).toBe(LAYOUT.rowTagsHeight);
     expect(pxOf('.char-line2', 'height')).toBe(LAYOUT.rowStateHeight);
     expect(pxOf('.char-sub', 'min-height')).toBe(null); // var(--tap) を使う
     expect(ruleBody('.char-sub')).toContain('min-height: var(--tap)');
@@ -70,22 +71,44 @@ describe('キャラカードが縦スクロールなしに収まる', () => {
     expect(content, `content=${content} body=${body}`).toBeLessThanOrEqual(body);
   });
 
-  it('カード1枚の高さは3行ぶんに収まる', () => {
-    // 名前 / 状態＋ステータス / 操作 の3行
+  it('カード1枚の高さは4行ぶんに収まる', () => {
+    // 名前 / チップ / 状態＋ステータス / 操作 の4行
     expect(teamCardHeight()).toBe(
       LAYOUT.rowNameHeight +
+        LAYOUT.rowTagsHeight +
         LAYOUT.rowStateHeight +
         LAYOUT.rowActionHeight +
-        LAYOUT.cardRowGap * 2 +
+        LAYOUT.cardRowGap * 3 +
         LAYOUT.cardPadding * 2 +
         LAYOUT.cardBorder,
     );
-    expect(teamCardHeight()).toBeLessThanOrEqual(130);
+    expect(teamCardHeight()).toBeLessThanOrEqual(150);
   });
 
   it('いちばん低い画面でも余白が残る（詰めすぎていない）', () => {
     const vh = Math.min(...TEST_VIEWPORT_HEIGHTS);
     expect(tabBodyHeight(vh) - teamTabContentHeight()).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('フェーズ2.5: 盤面まわりの余白を詰めてバーに回した', () => {
+  it('#app の余白と隙間が CSS と同じ', () => {
+    expect(pxOf('#app', 'padding')).toBe(LAYOUT.appPadding);
+    expect(pxOf('#app', 'gap')).toBe(LAYOUT.appGap);
+  });
+
+  it('想定画面（375x667 / 390x844 / 428x926）で中身が収まる', () => {
+    for (const vh of [667, 844, 926]) {
+      expect(teamTabContentHeight(), `vh=${vh}`).toBeLessThanOrEqual(tabBodyHeight(vh));
+      expect(boardHeight(vh), `vh=${vh}`).toBeGreaterThanOrEqual(LAYOUT.boardMinHeight);
+      const total =
+        LAYOUT.appPadding * 2 +
+        LAYOUT.headerHeight +
+        LAYOUT.appGap * 2 +
+        barHeight(vh) +
+        boardHeight(vh);
+      expect(total, `vh=${vh}`).toBeLessThanOrEqual(vh);
+    }
   });
 });
 

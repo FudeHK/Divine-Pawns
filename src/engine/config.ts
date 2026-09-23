@@ -89,8 +89,8 @@ export const DEFAULT_CONFIG: BattleConfig = {
   tick: 0.1,
   maxDuration: 90,
 
-  starStatMul: { 1: 1, 2: 1.8, 3: 3.24 },
-  starSkillMul: { 1: 1, 2: 1.5, 3: 2.25 },
+  starStatMul: { 1: 0.95, 2: 2.1, 3: 5.0 },
+  starSkillMul: { 1: 0.9, 2: 1.85, 3: 3.9 },
 
   defenseConstant: 100,
 

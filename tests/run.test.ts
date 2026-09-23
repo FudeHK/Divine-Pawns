@@ -18,6 +18,7 @@ import {
   createRun,
   currentSkillChoice,
   currentNode,
+  runEncounter,
   equipItem,
   equippedCountOf,
   inventorySummary,
@@ -131,7 +132,7 @@ describe('B1 章のステートマシン', () => {
 // ---------------------------------------------------------------------------
 
 describe('B2 リザルト＝ショップ', () => {
-  it('戦闘のあとは必ずショップになる（勝っても負けても）', () => {
+  it('戦闘に勝つとショップになる。負けたら同じ戦闘へ再挑戦', () => {
     const win = run();
     applyBattleResult(win, true, cfg);
     expect(currentNode(win, cfg)!.kind).toBe('shop');
@@ -139,8 +140,7 @@ describe('B2 リザルト＝ショップ', () => {
 
     const lose = run();
     applyBattleResult(lose, false, cfg);
-    expect(currentNode(lose, cfg)!.kind).toBe('shop');
-    expect(lose.shop).not.toBeNull();
+    expect(currentNode(lose, cfg)!.kind).toBe('battle');
   });
 
   it('通常ショップはキャラ2・加護2・装備2', () => {
@@ -359,22 +359,31 @@ describe('B4 ライフシステム', () => {
     expect(r.life).toBe(3);
   });
 
-  it('通常戦に負けるとライフ-1・救援コイン＋ショップへ', () => {
+  it('通常戦に負けるとライフ-1・救援コイン・同じ戦闘へ再挑戦', () => {
     const r = run();
     const res = applyBattleResult(r, false, cfg);
     expect(r.life).toBe(2);
     expect(r.coins).toBe(cfg.coinsLose);
     expect(res.gameOver).toBe(false);
-    expect(res.bossRetry).toBe(false);
+    expect(res.retry).toBe(true);
+    // ノードは進まず、同じ戦闘のまま
+    expect(currentNode(r, cfg)!.kind).toBe('battle');
+    expect(r.bossRetries).toBe(1);
+    // 勝てば先へ進む
+    applyBattleResult(r, true, cfg);
     expect(currentNode(r, cfg)!.kind).toBe('shop');
+    expect(r.bossRetries).toBe(0);
+  });
+
+  it('救援コインは通常戦の報酬の半分以上ある', () => {
+    expect(cfg.coinsLose).toBeGreaterThanOrEqual(Math.ceil(cfg.coinsWin / 2));
+    expect(cfg.coinsLose).toBeLessThanOrEqual(cfg.coinsWin);
   });
 
   it('ライフが0になるとゲームオーバー', () => {
     const r = run();
     applyBattleResult(r, false, cfg);
-    advanceTo(r, 'battle');
     applyBattleResult(r, false, cfg);
-    advanceTo(r, 'battle');
     const res = applyBattleResult(r, false, cfg);
     expect(r.life).toBe(0);
     expect(res.gameOver).toBe(true);
@@ -387,7 +396,7 @@ describe('B4 ライフシステム', () => {
     advanceTo(r, 'boss');
     const life = r.life;
     const res = applyBattleResult(r, false, cfg);
-    expect(res.bossRetry).toBe(true);
+    expect(res.retry).toBe(true);
     expect(r.life).toBe(life - 1);
     expect(r.bossRetries).toBe(1);
     // ノードは進まず、同じボスのまま
@@ -957,5 +966,30 @@ describe('装備のレア度', () => {
     expect(power('eq_vanguard')).toBeGreaterThan(power('eq_power'));
     expect(power('eq_aegis')).toBeGreaterThan(power('eq_bulwark'));
     expect(power('eq_bulwark')).toBeGreaterThan(power('eq_tough'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.5: 章ごとの難易度カーブと章ボスの上乗せ
+// ---------------------------------------------------------------------------
+
+describe('章ごとの難易度', () => {
+  it('章が進むほど敵が強くなる', () => {
+    const r = run('scale');
+    const at = (chapter: number): number => {
+      r.chapter = chapter;
+      return runEncounter(r, 'E2', cfg).units[0]!.scale ?? 1;
+    };
+    expect(at(2)).toBeGreaterThan(at(1));
+    expect(at(3)).toBeGreaterThan(at(2));
+  });
+
+  it('章ボスには追加の強さ倍率が乗る', () => {
+    const r = run('boss-scale');
+    r.chapter = 1;
+    const boss = runEncounter(r, 'B1', cfg).units[0]!.scale ?? 1;
+    const raw = (cfg.chapterScale[1] ?? 1) * 1.0;
+    expect(boss).toBeCloseTo(raw * (cfg.bossScale[1] ?? 1) * 0.9, 6);
+    expect(cfg.bossScale[1]).toBeGreaterThan(1);
   });
 });
