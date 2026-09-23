@@ -44,6 +44,19 @@ export interface RunConfig {
   /** ボスショップで高レア（rare / epic）を引く確率 */
   bossHighRarityChance: number;
 
+  /** 装備のレア度ごとの出現重み（通常ショップ／ボスショップ） */
+  equipmentTierWeights: { normal: Record<1 | 2 | 3, number>; boss: Record<1 | 2 | 3, number> };
+  /** 装備のレア度ごとの価格 */
+  equipmentTierPrice: Record<1 | 2 | 3, number>;
+
+  /** セール（割引）の設定 */
+  sale: {
+    /** 装備・加護1件ごとにセールになる確率 */
+    chance: number;
+    /** 割引率の候補（この中から1つ選ぶ） */
+    rates: number[];
+  };
+
   /** 枠拡張（6体目枠・昇格） */
   frontlineSlotsBase: number;
   supportSlotsBase: number;
@@ -86,6 +99,14 @@ export const DEFAULT_RUN_CONFIG: RunConfig = {
   bossPriceMul: 1.3,
   bossExtraPerKind: 1,
   bossHighRarityChance: 0.7,
+
+  equipmentTierWeights: {
+    normal: { 1: 55, 2: 33, 3: 12 },
+    boss: { 1: 15, 2: 45, 3: 40 },
+  },
+  equipmentTierPrice: { 1: 3, 2: 5, 3: 9 },
+
+  sale: { chance: 0.18, rates: [0.2, 0.25, 0.3] },
 
   frontlineSlotsBase: 3,
   supportSlotsBase: 2,

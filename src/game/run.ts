@@ -22,7 +22,15 @@ import { learnedSkills } from '../engine/build';
 import { equipmentSlots } from '../engine/stats';
 import type { EncounterDef, Loadout, Star } from '../engine/types';
 import { DEFAULT_RUN_CONFIG, type RunConfig } from './config';
-import type { EventOutcome, OwnedChar, RunNode, RunState, ShopItem, ShopOffer } from './types';
+import type {
+  EventOutcome,
+  OwnedChar,
+  RunNode,
+  RunState,
+  SaleInfo,
+  ShopItem,
+  ShopOffer,
+} from './types';
 
 export const RUN_VERSION = 1;
 
@@ -235,6 +243,28 @@ function priceOf(base: number, boss: boolean, cfg: RunConfig): number {
   return boss ? Math.round(base * cfg.bossPriceMul) : base;
 }
 
+/** 重み付き抽選でレア度を選ぶ */
+function pickTier(rng: Rng, weights: Record<1 | 2 | 3, number>): 1 | 2 | 3 {
+  const total = weights[1] + weights[2] + weights[3];
+  let r = rng.nextFloat() * total;
+  for (const t of [1, 2, 3] as const) {
+    r -= weights[t];
+    if (r < 0) return t;
+  }
+  return 3;
+}
+
+/**
+ * セールを抽選して価格を決める。
+ * 装備と加護だけが対象（枠拡張とキャラは定価）。
+ */
+function withSale(rng: Rng, base: number, cfg: RunConfig): { price: number; sale?: SaleInfo } {
+  if (!rng.chance(cfg.sale.chance)) return { price: base };
+  const rate = rng.pick(cfg.sale.rates);
+  const price = Math.max(1, Math.round(base * (1 - rate)));
+  return { price, sale: { basePrice: base, rate } };
+}
+
 /** 枠拡張の品（6体目枠 → 昇格 の順に出す。どちらも取り切っていたら null） */
 function slotItem(run: RunState, boss: boolean, cfg: RunConfig): ShopItem | null {
   if (!run.sixthSlot) return { kind: 'sixthSlot', price: priceOf(cfg.price.sixthSlot, boss, cfg) };
@@ -270,15 +300,16 @@ export function rollShop(
     items.push({
       kind: 'blessing',
       blessingId: rng.pick(pool.length > 0 ? pool : BLESSINGS).id,
-      price: priceOf(cfg.price.blessing, boss, cfg),
+      ...withSale(rng, priceOf(cfg.price.blessing, boss, cfg), cfg),
     });
   }
+  const weights = boss ? cfg.equipmentTierWeights.boss : cfg.equipmentTierWeights.normal;
   for (let i = 0; i < perKind; i++) {
-    items.push({
-      kind: 'equipment',
-      equipmentId: rng.pick(EQUIPMENT).id,
-      price: priceOf(cfg.price.equipment, boss, cfg),
-    });
+    const tier = pickTier(rng, weights);
+    const pool = EQUIPMENT.filter((e) => e.tier === tier);
+    const eq = rng.pick(pool.length > 0 ? pool : EQUIPMENT);
+    const base = priceOf(cfg.equipmentTierPrice[eq.tier], boss, cfg);
+    items.push({ kind: 'equipment', equipmentId: eq.id, ...withSale(rng, base, cfg) });
   }
 
   // ボスショップには 6体目枠か昇格が必ず1つ並ぶ
@@ -368,6 +399,102 @@ export function grantPromotion(run: RunState, cfg: RunConfig = DEFAULT_RUN_CONFI
 // ---------------------------------------------------------------------------
 // 合成（ランクアップ）とスキルの3択
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 装備の着脱（在庫は1個1個数える）
+// ---------------------------------------------------------------------------
+
+/** 手持ち（未装備）の個数 */
+export function stockOf(run: RunState, equipmentId: string): number {
+  return run.inventory.filter((id) => id === equipmentId).length;
+}
+
+/** 誰かが着けている個数 */
+export function equippedCountOf(run: RunState, equipmentId: string): number {
+  let n = 0;
+  for (const o of run.roster) for (const id of o.equipment) if (id === equipmentId) n += 1;
+  return n;
+}
+
+/** 総所持数（未装備＋装備中） */
+export function totalOwnedOf(run: RunState, equipmentId: string): number {
+  return stockOf(run, equipmentId) + equippedCountOf(run, equipmentId);
+}
+
+/** 所持している装備の一覧（種類ごとの内訳つき） */
+export function inventorySummary(
+  run: RunState,
+): { equipmentId: string; total: number; equipped: number; free: number }[] {
+  const ids = new Set<string>([
+    ...run.inventory,
+    ...run.roster.flatMap((o) => o.equipment.filter((x) => x !== '')),
+  ]);
+  return [...ids]
+    .sort()
+    .map((equipmentId) => ({
+      equipmentId,
+      total: totalOwnedOf(run, equipmentId),
+      equipped: equippedCountOf(run, equipmentId),
+      free: stockOf(run, equipmentId),
+    }));
+}
+
+export type EquipResult = 'ok' | 'noStock' | 'noSlot' | 'notFound';
+
+/**
+ * 装備をスロットに着ける。
+ * 手持ちに在庫がなければ失敗する（1個しか持っていない装備を2体には着けられない）。
+ * もともとそのスロットに入っていた装備は手持ちに戻る。
+ */
+export function equipItem(
+  run: RunState,
+  uid: string,
+  slot: number,
+  equipmentId: string,
+): EquipResult {
+  const o = run.roster.find((x) => x.uid === uid);
+  if (!o) return 'notFound';
+  const slots = equipmentSlots(o.star);
+  if (slot < 0 || slot >= slots) return 'noSlot';
+
+  const cur = o.equipment.slice(0, slots);
+  while (cur.length < slots) cur.push('');
+  if (cur[slot] === equipmentId) return 'ok';
+
+  const i = run.inventory.indexOf(equipmentId);
+  if (i < 0) return 'noStock';
+  run.inventory.splice(i, 1);
+
+  const before = cur[slot];
+  if (before) run.inventory.push(before);
+  cur[slot] = equipmentId;
+  o.equipment = cur;
+  return 'ok';
+}
+
+/** 装備を外す。外したぶんは手持ちに戻る */
+export function unequipItem(run: RunState, uid: string, slot: number): boolean {
+  const o = run.roster.find((x) => x.uid === uid);
+  if (!o) return false;
+  const slots = equipmentSlots(o.star);
+  const cur = o.equipment.slice(0, slots);
+  while (cur.length < slots) cur.push('');
+  const id = cur[slot];
+  if (!id) return false;
+  run.inventory.push(id);
+  cur[slot] = '';
+  o.equipment = cur;
+  return true;
+}
+
+/** ★が下がることはないが、スロット外にはみ出した装備は手持ちに戻す */
+export function reclaimOverflowEquipment(run: RunState): void {
+  for (const o of run.roster) {
+    const slots = equipmentSlots(o.star);
+    for (const id of o.equipment.slice(slots)) if (id) run.inventory.push(id);
+    o.equipment = o.equipment.slice(0, slots);
+  }
+}
 
 /** 所持しているか（同じキャラは1体しか持たない） */
 export function ownedChar(run: RunState, charId: string): OwnedChar | undefined {

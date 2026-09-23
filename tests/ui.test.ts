@@ -12,7 +12,7 @@ import { CHARACTERS } from '../src/data/characters';
 import { getEncounter } from '../src/data/encounters';
 import { getEnemy } from '../src/data/enemies';
 
-type TabId = 'team' | 'blessing' | 'run' | 'control';
+type TabId = 'team' | 'inventory' | 'run' | 'control';
 
 function app(): HTMLElement {
   return document.getElementById('app')!;
@@ -146,10 +146,10 @@ describe('画面構成', () => {
     expect(app().querySelector('.bottom-bar')).toBeTruthy();
   });
 
-  it('タブは 編成・加護・ラン・操作 の4つ', () => {
+  it('タブは 編成・持ち物・ラン・操作 の4つ', () => {
     expect([...app().querySelectorAll('.tab-row button')].map((b) => b.textContent)).toEqual([
       '編成',
-      '加護',
+      '持ち物',
       'ラン',
       '操作',
     ]);
@@ -158,7 +158,7 @@ describe('画面構成', () => {
   it('タブを切り替えると中身が入れ替わる', () => {
     openTab('team');
     expect(tabBody().querySelector('.char-pager')).toBeTruthy();
-    openTab('blessing');
+    openTab('inventory');
     expect(tabBody().querySelector('.blessing-row')).toBeTruthy();
     expect(tabBody().querySelector('.char-pager')).toBeNull();
     openTab('run');
@@ -170,7 +170,7 @@ describe('画面構成', () => {
   });
 
   it('実行ボタンはどのタブでも見える', () => {
-    for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
+    for (const t of ['team', 'inventory', 'run', 'control'] as TabId[]) {
       openTab(t);
       expect(app().querySelector('.action-row')!.textContent, t).toContain('戦闘');
     }
@@ -384,7 +384,7 @@ describe('A1 ポップアップは重ねて開く', () => {
   });
 
   it('加護一覧 → 加護詳細 も同じ機構で重なる', () => {
-    openTab('blessing');
+    openTab('inventory');
     const row = [...tabBody().querySelectorAll('.blessing-row')].find(
       (r) => r.querySelector('.blessing-name')?.textContent === '嵐の加護',
     )!;
@@ -556,10 +556,18 @@ describe('装備スロット（★の数と同じ）', () => {
   });
 });
 
-describe('「加護」タブ', () => {
+describe('「持ち物」タブ', () => {
+  it('加護と装備の小見出しで区切られている', () => {
+    openTab('inventory');
+    const heads = [...tabBody().querySelectorAll('.inv-heading')].map((n) => n.textContent ?? '');
+    expect(heads.length).toBe(2);
+    expect(heads[0]).toContain('加護');
+    expect(heads[1]).toBe('装備');
+  });
+
   it('全加護が 名前・レア度・1行説明・［説明］ で並ぶ', () => {
-    openTab('blessing');
-    const rows = [...tabBody().querySelectorAll('.blessing-row')];
+    openTab('inventory');
+    const rows = [...tabBody().querySelectorAll('.blessing-row:not(.inventory-row)')];
     expect(rows.length).toBe(BLESSINGS.length);
     for (const b of BLESSINGS) {
       const row = rows.find((r) => r.querySelector('.blessing-name')?.textContent === b.name)!;
@@ -573,7 +581,7 @@ describe('「加護」タブ', () => {
   });
 
   it('［説明］で summary がポップアップに出る', () => {
-    openTab('blessing');
+    openTab('inventory');
     const row = [...tabBody().querySelectorAll('.blessing-row')].find(
       (r) => r.querySelector('.blessing-name')?.textContent === '嵐の加護',
     )!;
@@ -687,7 +695,7 @@ describe('ラン進行とメイン画面の切り替え', () => {
     startRun();
     fightThrough();
     expect(screen()).toBe('result');
-    for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
+    for (const t of ['team', 'inventory', 'run', 'control'] as TabId[]) {
       expect(tabButton(t).disabled, t).toBe(false);
     }
     // リザルト中でも編成タブが開ける
@@ -697,20 +705,16 @@ describe('ラン進行とメイン画面の切り替え', () => {
     findButton('次へ')!.click();
     expect(screen()).toBe('shop');
     expect(tabButton('team').disabled).toBe(false);
-    openTab('blessing');
+    openTab('inventory');
     expect(tabBody()).toBeTruthy();
   });
 
   it('B3: ラン中は所持している加護・装備だけが並ぶ', () => {
     startRun();
-    openTab('blessing');
+    openTab('inventory');
     expect(tabBody().textContent).toContain('まだ加護を持っていません');
     expect(tabBody().querySelectorAll('.blessing-row:not(.inventory-row)').length).toBe(0);
     expect(tabBody().textContent).toContain('まだ装備を持っていません');
-
-    // 加護と装備を1つずつ持たせる
-    const run = (window as unknown as { __run?: unknown }).__run;
-    expect(run).toBeUndefined(); // 状態は module 内に閉じている
   });
 
   it('B4: ラン中は★を直接変えられない（合成ボタンも出さない）', () => {
@@ -760,7 +764,7 @@ describe('戦闘再生中', () => {
     findButton('▶ 戦闘開始')!.click();
     expect(screen()).toBe('battle');
     expect(tabButton('team').disabled).toBe(true);
-    expect(tabButton('blessing').disabled).toBe(true);
+    expect(tabButton('inventory').disabled).toBe(true);
     expect(tabButton('run').disabled).toBe(true);
     expect(tabButton('control').disabled).toBe(false);
     expect(tabButton('control').className).toContain('on');
@@ -787,7 +791,7 @@ describe('戦闘再生中', () => {
 describe('B6 下部バーの高さがタブで変わらない', () => {
   it('どのタブに切り替えても、外枠に高さを決めるインラインスタイルが付かない', () => {
     const heights = new Set<string>();
-    for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
+    for (const t of ['team', 'inventory', 'run', 'control'] as TabId[]) {
       openTab(t);
       const bar = app().querySelector('.bottom-bar') as HTMLElement;
       // 高さは CSS の固定値だけで決まる（JS が都度いじらない）
@@ -799,7 +803,7 @@ describe('B6 下部バーの高さがタブで変わらない', () => {
   });
 
   it('タブを切り替えても .bottom-bar は1つで、構造（タブ行/中身/操作行）が変わらない', () => {
-    for (const t of ['team', 'blessing', 'run', 'control'] as TabId[]) {
+    for (const t of ['team', 'inventory', 'run', 'control'] as TabId[]) {
       openTab(t);
       expect(app().querySelectorAll('.bottom-bar').length, t).toBe(1);
       const bar = app().querySelector('.bottom-bar')!;

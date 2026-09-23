@@ -14,6 +14,8 @@ import {
   createRun,
   currentNode,
   currentSkillChoice,
+  equipItem,
+  reclaimOverflowEquipment,
   resolveEventBattle,
   runEncounter,
   runLoadout,
@@ -23,6 +25,7 @@ import { runBattle } from '../src/engine/battle';
 import { buildBattleSetup } from '../src/engine/build';
 import { ALLY_CELLS } from '../src/engine/hex';
 import { equipmentSlots } from '../src/engine/stats';
+import { getEquipment } from '../src/data/equipment';
 
 /** 編成の方針 */
 export type BuildStyle = 'elite' | 'wide';
@@ -77,13 +80,14 @@ function arrange(run: RunState, style: BuildStyle): void {
   });
 }
 
-/** 在庫の装備を、方針に沿って配る */
+/** 在庫の装備を、方針に沿って配る（在庫の個数はきちんと消費する） */
 function equip(run: RunState, style: BuildStyle): void {
+  reclaimOverflowEquipment(run);
   const order = byPower(run);
   // 少数精鋭は先頭に寄せ、多キャラは順番に配る
   const targets = style === 'elite' ? order.slice(0, 2) : order;
   let guard = 0;
-  while (run.inventory.length > 0 && guard < 50) {
+  while (run.inventory.length > 0 && guard < 60) {
     guard += 1;
     let placed = false;
     for (const o of targets) {
@@ -92,10 +96,12 @@ function equip(run: RunState, style: BuildStyle): void {
       while (cur.length < slots) cur.push('');
       const i = cur.findIndex((x) => x === '');
       if (i < 0) continue;
-      const id = run.inventory.shift();
-      if (!id) break;
-      cur[i] = id;
-      o.equipment = cur;
+      // 手持ちの中で、いちばんレア度の高いものから着ける
+      const best = [...new Set(run.inventory)].sort(
+        (a, b) => getEquipment(b).tier - getEquipment(a).tier,
+      )[0];
+      if (!best) break;
+      if (equipItem(run, o.uid, i, best) !== 'ok') break;
       placed = true;
       if (run.inventory.length === 0) break;
     }

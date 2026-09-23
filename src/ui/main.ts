@@ -39,6 +39,10 @@ import {
   advanceNode,
   applyBattleResult,
   buyShopItem,
+  equipItem,
+  inventorySummary,
+  stockOf,
+  unequipItem,
   chooseEvent,
   chooseSkill,
   createRun,
@@ -61,7 +65,7 @@ import { buildReplay, type Replay } from './replay';
 // ---------------------------------------------------------------------------
 
 type Slot = 'none' | 'frontline' | 'support';
-type Tab = 'team' | 'blessing' | 'run' | 'control';
+type Tab = 'team' | 'inventory' | 'run' | 'control';
 
 interface Assignment {
   slot: Slot;
@@ -118,7 +122,7 @@ const runCfg = DEFAULT_RUN_CONFIG;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'team', label: '編成' },
-  { id: 'blessing', label: '加護' },
+  { id: 'inventory', label: '持ち物' },
   { id: 'run', label: 'ラン' },
   { id: 'control', label: '操作' },
 ];
@@ -1396,58 +1400,81 @@ function blessingRow(id: string, withToggle: boolean): HTMLElement {
   return row;
 }
 
-function renderBlessingTab(body: HTMLElement): void {
+/** 「持ち物」タブ：加護と装備をまとめて見る */
+function renderInventoryTab(body: HTMLElement): void {
   const owned = ownedBlessings();
   const section = h('div', 'blessings');
 
   if (state.run) {
-    // ラン中は所持している加護だけを見せる
-    body.appendChild(h('div', 'hint', `所持している加護 ${owned.length}`));
+    // ラン中は所持しているものだけを見せる
+    body.appendChild(h('h3', 'inv-heading', `加護（${owned.length}）`));
     if (owned.length === 0) {
-      body.appendChild(h('div', 'hint', 'まだ加護を持っていません（ショップとイベントで手に入ります）'));
+      body.appendChild(
+        h('div', 'hint', 'まだ加護を持っていません（ショップとイベントで手に入ります）'),
+      );
     }
     for (const id of owned) section.appendChild(blessingRow(id, false));
     body.appendChild(section);
-    renderInventory(body);
+    renderEquipmentList(body);
     return;
   }
 
-  body.appendChild(h('div', 'hint', `所持 ${owned.length} / ${BLESSINGS.length}`));
+  body.appendChild(h('h3', 'inv-heading', `加護（${owned.length} / ${BLESSINGS.length}）`));
   const sorted = [...BLESSINGS].sort(
     (a, b) => (owned.includes(a.id) ? 0 : 1) - (owned.includes(b.id) ? 0 : 1),
   );
   for (const b of sorted) section.appendChild(blessingRow(b.id, true));
   body.appendChild(section);
+  renderEquipmentList(body);
 }
 
-/** ラン中の所持装備（同じものは「×2」とまとめる） */
-function renderInventory(body: HTMLElement): void {
+/** 所持している装備。総数・装備中・未装備の内訳を出す */
+function renderEquipmentList(body: HTMLElement): void {
   const run = state.run;
-  if (!run) return;
-  body.appendChild(h('div', 'hint', '持っている装備'));
-  const counts = new Map<string, number>();
-  for (const id of run.inventory) counts.set(id, (counts.get(id) ?? 0) + 1);
-  if (counts.size === 0) {
+  body.appendChild(h('h3', 'inv-heading', '装備'));
+
+  if (!run) {
+    body.appendChild(h('div', 'hint', 'ラン外では、すべての装備を自由に付け外しできます'));
+    const all = h('div', 'blessings');
+    for (const e of EQUIPMENT) {
+      all.appendChild(equipmentRow(e.id, null));
+    }
+    body.appendChild(all);
+    return;
+  }
+
+  const summary = inventorySummary(run);
+  if (summary.length === 0) {
     body.appendChild(h('div', 'hint', 'まだ装備を持っていません'));
     return;
   }
   const list = h('div', 'blessings');
-  for (const [id, n] of counts) {
-    const e = getEquipment(id);
-    const row = h('div', 'blessing-row inventory-row');
-    const col = h('div', 'blessing-main');
-    const head = h('div', 'blessing-head');
-    head.appendChild(h('span', 'blessing-name', n > 1 ? `${e.name} ×${n}` : e.name));
-    head.appendChild(h('span', `tag equip-tier-${e.tier}`, `★${e.tier}`));
-    col.appendChild(head);
-    col.appendChild(h('div', 'blessing-desc', e.desc));
-    row.appendChild(col);
-    row.appendChild(
-      btn('説明', false, () => openSheet({ kind: 'explain', title: e.name, text: e.desc })),
-    );
-    list.appendChild(row);
-  }
+  for (const s of summary) list.appendChild(equipmentRow(s.equipmentId, s));
   body.appendChild(list);
+}
+
+function equipmentRow(
+  id: string,
+  stock: { total: number; equipped: number; free: number } | null,
+): HTMLElement {
+  const e = getEquipment(id);
+  const row = h('div', 'blessing-row inventory-row');
+  const col = h('div', 'blessing-main');
+  const head = h('div', 'blessing-head');
+  head.appendChild(h('span', 'blessing-name', stock && stock.total > 1 ? `${e.name} ×${stock.total}` : e.name));
+  head.appendChild(h('span', `tag equip-tier-${e.tier}`, `★${e.tier}`));
+  col.appendChild(head);
+  col.appendChild(h('div', 'blessing-desc', e.desc));
+  if (stock) {
+    col.appendChild(
+      h('div', 'equip-stock', `所持 ${stock.total}／装備中 ${stock.equipped}／空き ${stock.free}`),
+    );
+  }
+  row.appendChild(col);
+  row.appendChild(
+    btn('説明', false, () => openSheet({ kind: 'explain', title: e.name, text: e.desc })),
+  );
+  return row;
 }
 
 // ---------------------------------------------------------------------------
@@ -1539,11 +1566,22 @@ function renderShopScreen(main: HTMLElement): void {
   const list = h('div', 'shop-list');
   shop.items.forEach((slot, i) => {
     const { name, desc } = shopItemLabel(slot.item);
-    const row = h('div', 'shop-row' + (slot.sold ? ' sold' : ''));
+    const row = h('div', 'shop-row' + (slot.sold ? ' sold' : '') + (slot.item.sale ? ' on-sale' : ''));
     const col = h('div', 'shop-main');
     col.appendChild(h('div', 'shop-name', name));
     col.appendChild(h('div', 'shop-desc', desc));
     row.appendChild(col);
+    if (slot.item.sale) {
+      const badge = h('span', 'sale-badge', 'SALE');
+      col.querySelector('.shop-name')!.appendChild(badge);
+      col.appendChild(
+        h(
+          'div',
+          'shop-sale',
+          `${Math.round(slot.item.sale.rate * 100)}% オフ（定価 ${slot.item.sale.basePrice}c）`,
+        ),
+      );
+    }
     const b = btn(slot.sold ? '売切' : `${slot.item.price}c`, false, () => {
       if (buyShopItem(run, i, runCfg)) {
         state.runMessage = `${name} を購入`;
@@ -1866,7 +1904,7 @@ function renderBottomBar(root: HTMLElement): void {
 
   const body = h('div', 'tab-body');
   if (state.tab === 'team') renderTeamTab(body);
-  else if (state.tab === 'blessing') renderBlessingTab(body);
+  else if (state.tab === 'inventory') renderInventoryTab(body);
   else if (state.tab === 'run') renderRunTab(body);
   else renderControlTab(body);
   bar.appendChild(body);
@@ -2045,11 +2083,27 @@ function renderEquipSheet(
   );
 
   const choose = (id: string): void => {
-    updateMember(key, (o) => {
-      const next = padSlots(o.equipment, o.star);
-      next[cur] = id;
-      o.equipment = next;
-    });
+    const run = state.run;
+    if (run) {
+      // ラン中は在庫を1つずつ数える（同じ装備を2体には着けられない）
+      if (id === '') {
+        unequipItem(run, key, cur);
+      } else {
+        const res = equipItem(run, key, cur, id);
+        if (res === 'noStock') {
+          state.message = `${getEquipment(id).name} の在庫がありません`;
+          render();
+          return;
+        }
+      }
+      autoSave();
+    } else {
+      updateMember(key, (o) => {
+        const next = padSlots(o.equipment, o.star);
+        next[cur] = id;
+        o.equipment = next;
+      });
+    }
     closeTopSheet();
   };
 
@@ -2058,21 +2112,24 @@ function renderEquipSheet(
   none.addEventListener('click', () => choose(''));
   body.appendChild(none);
 
-  // ラン中は所持している装備だけ選べる
+  // ラン中は在庫があるものだけ選べる
   const run = state.run;
   const pool = run
-    ? EQUIPMENT.filter((e) => run.inventory.includes(e.id) || slots.includes(e.id))
+    ? EQUIPMENT.filter((e) => stockOf(run, e.id) > 0 || slots[cur] === e.id)
     : EQUIPMENT;
   for (const e of pool) {
+    const free = run ? stockOf(run, e.id) : null;
     const item = h('button', 'sheet-list-item' + (slots[cur] === e.id ? ' on' : ''));
     const col = h('div');
-    col.appendChild(h('div', 'li-name', e.name));
-    col.appendChild(h('div', 'li-desc', e.desc));
+    col.appendChild(
+      h('div', 'li-name', free !== null && free > 0 ? `${e.name}（空き ${free}）` : e.name),
+    );
+    col.appendChild(h('div', 'li-desc', `★${e.tier}｜${e.desc}`));
     item.appendChild(col);
     item.addEventListener('click', () => choose(e.id));
     body.appendChild(item);
   }
-  if (pool.length === 0) body.appendChild(h('div', 'hint', '持っている装備がありません'));
+  if (pool.length === 0) body.appendChild(h('div', 'hint', '着けられる装備がありません'));
   root.appendChild(wrap);
 }
 

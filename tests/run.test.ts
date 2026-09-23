@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTERS, getSkill } from '../src/data/characters';
+import { getEquipment } from '../src/data/equipment';
 import { EVENTS, RISKY_EVENTS, SAFE_EVENTS, getEvent } from '../src/data/events';
 import { DEFAULT_RUN_CONFIG, cloneRunConfig } from '../src/game/config';
 import {
@@ -17,6 +18,12 @@ import {
   createRun,
   currentSkillChoice,
   currentNode,
+  equipItem,
+  equippedCountOf,
+  inventorySummary,
+  stockOf,
+  totalOwnedOf,
+  unequipItem,
   availableCharacters,
   grantCharacter,
   grantPromotion,
@@ -746,5 +753,209 @@ describe('A3 スキルの取得と、同キャラ再獲得での★アップ', (
     const r = run();
     const o = r.roster[0]!;
     expect(runLoadout(r).frontline[0]!.skills).toEqual(o.skills);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 装備の所持数（1個獲得＝1個しか装備できない）
+// ---------------------------------------------------------------------------
+
+describe('装備の所持数', () => {
+  function twoChars(): RunState {
+    const r = run('stock');
+    const other = CHARACTERS.find((c) => c.id !== r.roster[0]!.charId)!;
+    grantCharacter(r, other.id);
+    return r;
+  }
+
+  it('1個しか持っていない装備は、2体目には着けられない', () => {
+    const r = twoChars();
+    r.inventory.push('eq_power');
+    const [a, b] = r.roster;
+
+    expect(equipItem(r, a!.uid, 0, 'eq_power')).toBe('ok');
+    expect(stockOf(r, 'eq_power')).toBe(0);
+    expect(equippedCountOf(r, 'eq_power')).toBe(1);
+
+    // 2体目は在庫がないので失敗する
+    expect(equipItem(r, b!.uid, 0, 'eq_power')).toBe('noStock');
+    expect(b!.equipment.filter((x) => x !== '')).toHaveLength(0);
+    expect(equippedCountOf(r, 'eq_power')).toBe(1);
+  });
+
+  it('2個持っていれば2体に着けられる', () => {
+    const r = twoChars();
+    r.inventory.push('eq_power', 'eq_power');
+    const [a, b] = r.roster;
+    expect(equipItem(r, a!.uid, 0, 'eq_power')).toBe('ok');
+    expect(equipItem(r, b!.uid, 0, 'eq_power')).toBe('ok');
+    expect(equippedCountOf(r, 'eq_power')).toBe(2);
+    expect(stockOf(r, 'eq_power')).toBe(0);
+    expect(totalOwnedOf(r, 'eq_power')).toBe(2);
+  });
+
+  it('外すと在庫に戻り、別のキャラに着け直せる', () => {
+    const r = twoChars();
+    r.inventory.push('eq_power');
+    const [a, b] = r.roster;
+    equipItem(r, a!.uid, 0, 'eq_power');
+    expect(unequipItem(r, a!.uid, 0)).toBe(true);
+    expect(stockOf(r, 'eq_power')).toBe(1);
+    expect(equippedCountOf(r, 'eq_power')).toBe(0);
+    expect(equipItem(r, b!.uid, 0, 'eq_power')).toBe('ok');
+    expect(equippedCountOf(r, 'eq_power')).toBe(1);
+  });
+
+  it('着け替えると、前の装備は在庫に戻る', () => {
+    const r = run('swap');
+    r.inventory.push('eq_power', 'eq_tough');
+    const a = r.roster[0]!;
+    equipItem(r, a.uid, 0, 'eq_power');
+    expect(equipItem(r, a.uid, 0, 'eq_tough')).toBe('ok');
+    expect(stockOf(r, 'eq_power')).toBe(1);
+    expect(stockOf(r, 'eq_tough')).toBe(0);
+  });
+
+  it('★のスロット数を超えるところには着けられない', () => {
+    const r = run('slots');
+    r.inventory.push('eq_power');
+    const a = r.roster[0]!;
+    expect(a.star).toBe(1);
+    expect(equipItem(r, a.uid, 1, 'eq_power')).toBe('noSlot');
+    expect(stockOf(r, 'eq_power')).toBe(1);
+  });
+
+  it('ショップで手に入れると在庫が増える', () => {
+    const r = run('gain');
+    applyBattleResult(r, true, cfg);
+    const idx = r.shop!.items.findIndex((x) => x.item.kind === 'equipment');
+    const item = r.shop!.items[idx]!.item;
+    if (item.kind !== 'equipment') throw new Error('equipment ではない');
+    r.coins = 99;
+    const before = totalOwnedOf(r, item.equipmentId);
+    expect(buyShopItem(r, idx, cfg)).toBe(true);
+    expect(totalOwnedOf(r, item.equipmentId)).toBe(before + 1);
+    expect(stockOf(r, item.equipmentId)).toBe(before + 1);
+  });
+
+  it('内訳（総数・装備中・空き）が出せる', () => {
+    const r = twoChars();
+    r.inventory.push('eq_power', 'eq_power', 'eq_tough');
+    equipItem(r, r.roster[0]!.uid, 0, 'eq_power');
+    const sum = inventorySummary(r);
+    expect(sum.find((x) => x.equipmentId === 'eq_power')).toEqual({
+      equipmentId: 'eq_power',
+      total: 2,
+      equipped: 1,
+      free: 1,
+    });
+    const tough = sum.find((x) => x.equipmentId === 'eq_tough')!;
+    expect(tough.total).toBe(1);
+    expect(tough.equipped).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// セール（割引）
+// ---------------------------------------------------------------------------
+
+describe('セール（割引）', () => {
+  it('セール品は 定価 × (1 - 割引率) の価格になる', () => {
+    let found = 0;
+    for (let i = 0; i < 60; i++) {
+      const r = run(`sale-${i}`);
+      applyBattleResult(r, true, cfg);
+      for (const slot of r.shop!.items) {
+        const sale = slot.item.sale;
+        if (!sale) continue;
+        found += 1;
+        expect(cfg.sale.rates).toContain(sale.rate);
+        expect(slot.item.price).toBe(Math.max(1, Math.round(sale.basePrice * (1 - sale.rate))));
+        expect(slot.item.price).toBeLessThan(sale.basePrice);
+      }
+    }
+    expect(found).toBeGreaterThan(0);
+  });
+
+  it('セールになるのは装備と加護だけ', () => {
+    for (let i = 0; i < 40; i++) {
+      const r = run(`sale-kind-${i}`);
+      advanceTo(r, 'boss');
+      applyBattleResult(r, true, cfg);
+      for (const slot of r.shop!.items) {
+        if (!slot.item.sale) continue;
+        expect(['equipment', 'blessing']).toContain(slot.item.kind);
+      }
+    }
+  });
+
+  it('リロールするとセールも引き直される', () => {
+    const r = run('sale-reroll');
+    applyBattleResult(r, true, cfg);
+    r.coins = 200;
+    const snapshot = (): string =>
+      r.shop!.items.map((x) => `${x.item.price}:${x.item.sale?.rate ?? '-'}`).join(',');
+    const before = snapshot();
+    rerollShop(r, cfg);
+    expect(snapshot()).not.toBe(before);
+  });
+
+  it('同じ seed ならセールも同じ', () => {
+    const a = run('same-sale');
+    const b = run('same-sale');
+    applyBattleResult(a, true, cfg);
+    applyBattleResult(b, true, cfg);
+    expect(JSON.stringify(a.shop)).toBe(JSON.stringify(b.shop));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 装備のレア度
+// ---------------------------------------------------------------------------
+
+describe('装備のレア度', () => {
+  it('ショップの装備価格はレア度ごとに決まる', () => {
+    for (let i = 0; i < 30; i++) {
+      const r = run(`tier-${i}`);
+      applyBattleResult(r, true, cfg);
+      for (const slot of r.shop!.items) {
+        if (slot.item.kind !== 'equipment') continue;
+        const e = getEquipment(slot.item.equipmentId);
+        const base = slot.item.sale?.basePrice ?? slot.item.price;
+        expect(base).toBe(cfg.equipmentTierPrice[e.tier]);
+      }
+    }
+  });
+
+  it('ボスショップの方が高レア装備が出やすい', () => {
+    const highRate = (boss: boolean): number => {
+      let high = 0;
+      let total = 0;
+      for (let i = 0; i < 60; i++) {
+        const r = run(`w-${boss}-${i}`);
+        if (boss) advanceTo(r, 'boss');
+        applyBattleResult(r, true, cfg);
+        for (const slot of r.shop!.items) {
+          if (slot.item.kind !== 'equipment') continue;
+          total += 1;
+          if (getEquipment(slot.item.equipmentId).tier >= 2) high += 1;
+        }
+      }
+      return high / Math.max(1, total);
+    };
+    expect(highRate(true)).toBeGreaterThan(highRate(false));
+  });
+
+  it('レア度が高い装備ほどステータスの伸びが大きい', () => {
+    const power = (id: string): number => {
+      const e = getEquipment(id);
+      const flat = (e.flat?.atk ?? 0) + (e.flat?.maxHp ?? 0) / 10 + (e.flat?.def ?? 0) * 2;
+      const pct = ((e.pct?.atk ?? 0) + (e.pct?.def ?? 0)) * 100;
+      return flat + pct;
+    };
+    expect(power('eq_greatpower')).toBeGreaterThan(power('eq_vanguard'));
+    expect(power('eq_vanguard')).toBeGreaterThan(power('eq_power'));
+    expect(power('eq_aegis')).toBeGreaterThan(power('eq_bulwark'));
+    expect(power('eq_bulwark')).toBeGreaterThan(power('eq_tough'));
   });
 });

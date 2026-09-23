@@ -46,15 +46,23 @@ export interface PendingSkillChoice {
   options: string[];
 }
 
-/** ショップに並ぶ品 */
+/** 割引（セール）の情報 */
+export interface SaleInfo {
+  /** 割引前の価格 */
+  basePrice: number;
+  /** 割引率（0.25 なら 25% オフ） */
+  rate: number;
+}
+
+/** ショップに並ぶ品。price は割引後の実売価格 */
 export type ShopItem =
-  | { kind: 'character'; charId: string; price: number }
-  | { kind: 'blessing'; blessingId: string; price: number }
-  | { kind: 'equipment'; equipmentId: string; price: number }
+  | { kind: 'character'; charId: string; price: number; sale?: SaleInfo }
+  | { kind: 'blessing'; blessingId: string; price: number; sale?: SaleInfo }
+  | { kind: 'equipment'; equipmentId: string; price: number; sale?: SaleInfo }
   /** 6体目枠 */
-  | { kind: 'sixthSlot'; price: number }
+  | { kind: 'sixthSlot'; price: number; sale?: SaleInfo }
   /** 昇格（サポート枠 → 前衛枠） */
-  | { kind: 'promotion'; price: number };
+  | { kind: 'promotion'; price: number; sale?: SaleInfo };
 
 export interface ShopOffer {
   /** 並んでいる品（購入済みは sold=true） */
@@ -95,7 +103,11 @@ export interface RunState {
 
   roster: OwnedChar[];
   blessings: string[];
-  /** 未装備の装備 */
+/**
+   * 手持ちの装備（まだ誰も着けていないぶん）。
+   * 同じ装備を複数持てるので、同じIDが並ぶことがある。
+   * キャラに着けるとここから1つ減り、外すと1つ戻る。
+   */
   inventory: string[];
 
   /** 前衛枠（3〜6） */

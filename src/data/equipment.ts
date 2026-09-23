@@ -65,21 +65,23 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_synergy',
     name: '連携の紋章（仮）',
-    desc: '隣接する味方1体につき攻撃速度 +5%',
+    desc: '攻撃速度 +8%・隣接する味方1体につきさらに +7%',
     tier: 2,
+    pct: { atkSpeed: 0.08 },
     effects: perAdjacentAlly(
       'eq_synergy_e',
       '連携の紋章',
       '隣にいる味方の数だけ攻撃速度が上がる',
       'atkSpeed',
-      0.05,
+      0.07,
     ),
   },
   {
     id: 'eq_vanguard',
     name: '先陣の旗（仮）',
-    desc: '最前列にいる間、攻撃力 +18%',
+    desc: '攻撃力 +45。最前列にいる間さらに +30%',
     tier: 2,
+    flat: { atk: 45 },
     effects: [
       {
         id: 'eq_vanguard_e',
@@ -87,15 +89,16 @@ const raw: EquipmentDef[] = [
         summary: '最前列にいる間、攻撃力が上がる',
         trigger: { kind: 'always' },
         conditions: [{ kind: 'inFrontRow' }],
-        effects: [{ kind: 'statMod', target: 'self', stat: 'atk', mode: 'pct', value: 0.18 }],
+        effects: [{ kind: 'statMod', target: 'self', stat: 'atk', mode: 'pct', value: 0.3 }],
       },
     ],
   },
   {
     id: 'eq_longsight',
     name: '遠見の眼鏡（仮）',
-    desc: '最後列にいる間、攻撃速度 +20%',
+    desc: '攻撃力 +40。最後列にいる間、攻撃速度 +30%',
     tier: 2,
+    flat: { atk: 40 },
     effects: [
       {
         id: 'eq_longsight_e',
@@ -103,15 +106,16 @@ const raw: EquipmentDef[] = [
         summary: '最後列にいる間、攻撃速度が上がる',
         trigger: { kind: 'always' },
         conditions: [{ kind: 'inBackRow' }],
-        effects: [{ kind: 'statMod', target: 'self', stat: 'atkSpeed', mode: 'pct', value: 0.2 }],
+        effects: [{ kind: 'statMod', target: 'self', stat: 'atkSpeed', mode: 'pct', value: 0.3 }],
       },
     ],
   },
   {
     id: 'eq_bulwark',
     name: '重ね盾（仮）',
-    desc: '開幕、自分に最大HPの12%のシールド',
+    desc: 'HP +700。開幕に最大HPの20%のシールド',
     tier: 2,
+    flat: { maxHp: 700 },
     effects: [
       {
         id: 'eq_bulwark_e',
@@ -119,7 +123,7 @@ const raw: EquipmentDef[] = [
         summary: '開幕に自分へシールドを張る',
         trigger: { kind: 'battleStart' },
         effects: [
-          { kind: 'shield', target: 'self', amount: { stat: 'maxHp', coef: 0.12, ref: 'self' } },
+          { kind: 'shield', target: 'self', amount: { stat: 'maxHp', coef: 0.2, ref: 'self' } },
         ],
       },
     ],
@@ -127,8 +131,9 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_lastwill',
     name: '窮鼠の牙（仮）',
-    desc: 'HPが40%を下回ると攻撃力 +30%',
+    desc: '防御 +25。HPが40%を下回ると攻撃力 +50%',
     tier: 2,
+    flat: { def: 25 },
     effects: [
       {
         id: 'eq_lastwill_e',
@@ -136,15 +141,16 @@ const raw: EquipmentDef[] = [
         summary: 'HPが減ると攻撃力が上がる',
         trigger: { kind: 'always' },
         conditions: [{ kind: 'selfHpBelow', pct: 40 }],
-        effects: [{ kind: 'statMod', target: 'self', stat: 'atk', mode: 'pct', value: 0.3 }],
+        effects: [{ kind: 'statMod', target: 'self', stat: 'atk', mode: 'pct', value: 0.5 }],
       },
     ],
   },
   {
     id: 'eq_battery',
     name: '導きの数珠（仮）',
-    desc: '被弾するたびにマナ +6',
+    desc: '最大マナ −25。被弾するたびにマナ +6',
     tier: 2,
+    flat: { maxMana: -25 },
     effects: [
       {
         id: 'eq_battery_e',
@@ -160,32 +166,33 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_greatpower',
     name: '巨人の手甲（仮）',
-    desc: '攻撃力 +40・攻撃力 +12%',
+    desc: '攻撃力 +120・攻撃力 +35%',
     tier: 3,
-    flat: { atk: 40 },
-    pct: { atk: 0.12 },
+    flat: { atk: 120 },
+    pct: { atk: 0.35 },
   },
   {
     id: 'eq_aegis',
     name: '不動の胸甲（仮）',
-    desc: 'HP +500・防御 +20%',
+    desc: 'HP +1300・防御 +60%',
     tier: 3,
-    flat: { maxHp: 500 },
-    pct: { def: 0.2 },
+    flat: { maxHp: 1300 },
+    pct: { def: 0.6 },
   },
   {
     id: 'eq_secondwind',
     name: '巡りの香炉（仮）',
-    desc: '10秒ごとに、味方全体を自分の攻撃力ぶん回復',
+    desc: 'HP +600。8秒ごとに味方全体を自分の攻撃力×2で回復',
     tier: 3,
+    flat: { maxHp: 600 },
     effects: [
       {
         id: 'eq_secondwind_e',
         name: '巡りの香炉',
         summary: '一定間隔で味方全体を回復する',
-        trigger: { kind: 'everyN', seconds: 10 },
+        trigger: { kind: 'everyN', seconds: 8 },
         effects: [
-          { kind: 'heal', target: 'allAllies', amount: { stat: 'atk', coef: 1.0, ref: 'self' } },
+          { kind: 'heal', target: 'allAllies', amount: { stat: 'atk', coef: 2.0, ref: 'self' } },
         ],
       },
     ],
@@ -193,15 +200,16 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_executioner',
     name: '討ち取りの刻印（仮）',
-    desc: '撃破するたびに攻撃力 +8%（重複・戦闘中ずっと）',
+    desc: '攻撃力 +60。撃破するたびに攻撃力 +20%（重複）',
     tier: 3,
+    flat: { atk: 60 },
     effects: [
       {
         id: 'eq_executioner_e',
         name: '討ち取りの刻印',
         summary: '敵を倒すたびに攻撃力が上がる',
         trigger: { kind: 'onKill' },
-        effects: [{ kind: 'statMod', target: 'self', stat: 'atk', mode: 'pct', value: 0.08 }],
+        effects: [{ kind: 'statMod', target: 'self', stat: 'atk', mode: 'pct', value: 0.2 }],
       },
     ],
   },
@@ -210,9 +218,10 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_emberfang',
     name: '燠火の牙（仮）',
-    desc: '炎：攻撃するたびに燃焼を1付与',
+    desc: '炎：攻撃力 +35。攻撃するたびに燃焼を1付与',
     tier: 2,
     element: 'fire',
+    flat: { atk: 35 },
     effects: [
       {
         id: 'eq_emberfang_e',
@@ -226,9 +235,10 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_frostedge',
     name: '霜刃の飾り（仮）',
-    desc: '氷：攻撃するたびに凍傷を1付与',
+    desc: '氷：攻撃力 +35。攻撃するたびに凍傷を1付与',
     tier: 2,
     element: 'ice',
+    flat: { atk: 35 },
     effects: [
       {
         id: 'eq_frostedge_e',
@@ -242,9 +252,10 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_thornband',
     name: '棘蔦の帯（仮）',
-    desc: '木：被弾すると攻撃者に猛毒を1付与',
+    desc: '木：HP +450。被弾すると攻撃者に猛毒を1付与',
     tier: 2,
     element: 'wood',
+    flat: { maxHp: 450 },
     effects: [
       {
         id: 'eq_thornband_e',
@@ -258,9 +269,10 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_stormcoil',
     name: '雷紋の環（仮）',
-    desc: '雷：スキルを撃つと対象の周囲に麻痺を2付与',
+    desc: '雷：攻撃力 +35。スキルで周囲に麻痺を2付与',
     tier: 2,
     element: 'lightning',
+    flat: { atk: 35 },
     effects: [
       {
         id: 'eq_stormcoil_e',
@@ -282,16 +294,17 @@ const raw: EquipmentDef[] = [
   {
     id: 'eq_pyreheart',
     name: '劫火の心臓（仮）',
-    desc: '炎：燃焼のダメージ +25%',
+    desc: '炎：攻撃力 +70。燃焼のダメージ +60%',
     tier: 3,
     element: 'fire',
+    flat: { atk: 70 },
     effects: [
       {
         id: 'eq_pyreheart_e',
         name: '劫火の心臓',
         summary: '燃焼のダメージを上げる',
         trigger: { kind: 'always' },
-        effects: [{ kind: 'globalMod', key: 'burnDamagePct', mode: 'add', value: 0.25 }],
+        effects: [{ kind: 'globalMod', key: 'burnDamagePct', mode: 'add', value: 0.6 }],
       },
     ],
   },

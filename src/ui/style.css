@@ -970,3 +970,39 @@ select {
 .skill-choice .sheet-list-item {
   align-items: flex-start;
 }
+
+/* --- 持ち物タブ --- */
+
+.inv-heading {
+  font-size: var(--font-body);
+  font-weight: 700;
+  margin: 8px 0 4px;
+}
+
+.equip-stock {
+  font-size: var(--font-sub);
+  color: var(--ice);
+  margin-top: 2px;
+}
+
+/* --- セール --- */
+
+.sale-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #1a1206;
+  font-size: var(--font-sub);
+  font-weight: 700;
+}
+
+.shop-row.on-sale {
+  border-color: var(--accent);
+}
+
+.shop-sale {
+  font-size: var(--font-sub);
+  color: var(--accent);
+}
