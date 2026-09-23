@@ -3,9 +3,10 @@
  *
  * 画面は2層。
  *   上: 盤面（常に見える。残りの高さいっぱい）
- *   下: タブ付きの操作バー（編成 / 加護 / ラン / 操作）＋ いつでも押せる実行ボタン
+ *   下: タブ付きの操作バー（編成 / 持ち物 / 進行 / 操作）＋ いつでも押せる実行ボタン
  *
- * 「ラン」タブを使っていない間は、単発の戦闘を試すサンドボックスとして動く。
+ * 起動するとタイトル画面が出て、「プラクティス」（自由編成のサンドボックス）か
+ * 「挑戦」（章1〜3の本編）を選ぶ。プラクティスは挑戦のセーブに一切触れない。
  */
 
 import './style.css';
@@ -110,7 +111,10 @@ type BattleContext = 'sandbox' | 'runNode' | 'runEvent';
  * メイン画面に何を出すか。
  * 盤面を出すのは「戦闘準備中」と「戦闘実行中」だけ。
  */
-type ScreenMode = 'prep' | 'battle' | 'result' | 'shop' | 'event';
+type ScreenMode = 'title' | 'prep' | 'battle' | 'result' | 'shop' | 'event';
+
+/** 遊び方のモード。プラクティスは挑戦のセーブに触れない */
+type PlayMode = 'title' | 'practice' | 'challenge';
 
 /** 盤面を出す画面かどうか */
 function showsBoard(mode: ScreenMode): boolean {
@@ -123,7 +127,7 @@ const runCfg = DEFAULT_RUN_CONFIG;
 const TABS: { id: Tab; label: string }[] = [
   { id: 'team', label: '編成' },
   { id: 'inventory', label: '持ち物' },
-  { id: 'run', label: 'ラン' },
+  { id: 'run', label: '進行' },
   { id: 'control', label: '操作' },
 ];
 
@@ -144,7 +148,13 @@ const state = {
   speed: 1 as 1 | 2 | 4,
   tab: 'team' as Tab,
   /** メイン画面のモード */
-  screen: 'prep' as ScreenMode,
+  screen: 'title' as ScreenMode,
+  /** 遊び方（タイトル / プラクティス / 挑戦） */
+  mode: 'title' as PlayMode,
+  /** タイトルで「挑戦」を選び、続きから遊ぶか聞いている最中か */
+  askResume: false,
+  /** 直前に描いた所持コイン（増減の演出用） */
+  lastCoins: null as number | null,
   /** リザルト画面に出す内容（戦闘・イベント共通） */
   resultInfo: null as {
     tone: 'win' | 'lose' | 'neutral';
@@ -158,9 +168,9 @@ const state = {
   sheets: [] as Sheet[],
   resumeAfterSheet: false,
 
-  /** 進行中のラン */
+  /** 進行中の挑戦 */
   run: null as RunState | null,
-  /** 保存されたランを見つけた（再開するか聞く） */
+  /** 保存された挑戦を見つけた（再開するか聞く） */
   savedRun: null as RunState | null,
   runMessage: '',
 };
@@ -918,8 +928,8 @@ function showResult(
   else if (run && run.phase === 'node') {
     const node = currentNode(run, runCfg);
     next = node ? `次は「${NODE_LABEL[node.kind]}」` : '';
-  } else if (run?.phase === 'clear') next = 'ランをクリアした';
-  else if (run?.phase === 'gameover') next = 'ランはここまで';
+  } else if (run?.phase === 'clear') next = '挑戦をクリアした';
+  else if (run?.phase === 'gameover') next = '挑戦はここまで';
   state.resultInfo = {
     tone,
     title,
@@ -965,10 +975,12 @@ function pumpSkillChoice(): boolean {
 }
 
 function startRun(): void {
+  state.mode = 'challenge';
+  state.askResume = false;
   state.run = createRun(state.seed, runCfg);
   state.savedRun = null;
   state.cardIndex = 0;
-  state.runMessage = 'ランを始めた。';
+  state.runMessage = '挑戦を始めた。';
   state.resultInfo = null;
   state.replay = null;
   autoSave();
@@ -978,11 +990,13 @@ function startRun(): void {
 }
 
 function resumeRun(r: RunState): void {
+  state.mode = 'challenge';
+  state.askResume = false;
   state.run = r;
   state.savedRun = null;
   state.cardIndex = 0;
   state.seed = r.seed;
-  state.runMessage = 'ランを再開した。';
+  state.runMessage = '挑戦を再開した。';
   setScreen(screenForNode());
   state.tab = state.screen === 'prep' ? 'team' : 'run';
   render();
@@ -993,11 +1007,55 @@ function abandonRun(): void {
   state.savedRun = null;
   clearRun();
   state.cardIndex = 0;
-  state.runMessage = 'ランをやめた。';
+  state.runMessage = '挑戦をやめた。';
   state.resultInfo = null;
   setScreen('prep');
   state.tab = 'run';
   render();
+}
+
+/** タイトル画面に戻る（挑戦の進行はオートセーブ済みのまま残す） */
+function goTitle(): void {
+  autoSave();
+  if (state.run) state.savedRun = state.run;
+  state.run = null;
+  state.mode = 'title';
+  state.askResume = false;
+  state.replay = null;
+  state.playing = false;
+  state.frame = 0;
+  state.pendingResult = false;
+  state.resultInfo = null;
+  state.sheets.length = 0;
+  state.runMessage = '';
+  state.message = '';
+  setScreen('title');
+  render();
+}
+
+/** タイトルから「プラクティス」を選ぶ（挑戦のセーブには一切触らない） */
+function startPractice(): void {
+  state.mode = 'practice';
+  state.run = null;
+  state.askResume = false;
+  state.replay = null;
+  state.pendingResult = false;
+  state.resultInfo = null;
+  state.runMessage = '';
+  state.cardIndex = 0;
+  state.tab = 'team';
+  setScreen('prep');
+  render();
+}
+
+/** タイトルから「挑戦」を選ぶ。続きがあれば聞く、無ければ新規で始める */
+function chooseChallenge(): void {
+  if (state.savedRun) {
+    state.askResume = true;
+    render();
+    return;
+  }
+  startRun();
 }
 
 // ---------------------------------------------------------------------------
@@ -1231,6 +1289,42 @@ function h(tag: string, cls?: string, text?: string): HTMLElement {
   return n;
 }
 
+/** コインの文字列（アイコン付き） */
+function coinText(n: number): string {
+  return `🪙 ${n}`;
+}
+
+/** 所持コインのチップ（増減したら一瞬光らせる） */
+function coinChip(coins: number): HTMLElement {
+  const el = h('span', 'coin-chip');
+  el.appendChild(h('span', 'coin-icon', '🪙'));
+  el.appendChild(h('span', 'coin-value', String(coins)));
+  if (state.lastCoins !== null && state.lastCoins !== coins) {
+    el.classList.add(coins > state.lastCoins ? 'coin-up' : 'coin-down');
+    const diff = coins - state.lastCoins;
+    el.appendChild(h('span', 'coin-diff', `${diff > 0 ? '+' : ''}${diff}`));
+  }
+  return el;
+}
+
+/** 価格つきのボタン（コイン数を目立たせる） */
+function priceBtn(
+  label: string,
+  price: number,
+  affordable: boolean,
+  fn: () => void,
+): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.className = 'price-btn' + (affordable ? '' : ' cant-afford');
+  if (label) b.appendChild(h('span', 'price-label', label));
+  const tag = h('span', 'price-tag');
+  tag.appendChild(h('span', 'coin-icon', '🪙'));
+  tag.appendChild(h('span', 'price-num', String(price)));
+  b.appendChild(tag);
+  b.addEventListener('click', fn);
+  return b;
+}
+
 function btn(label: string, on: boolean, fn: () => void, cls = ''): HTMLButtonElement {
   const b = document.createElement('button');
   b.textContent = label;
@@ -1403,7 +1497,7 @@ function blessingRow(id: string, withToggle: boolean): HTMLElement {
       btn(owned ? '所持' : '入手', owned, () => {
         if (state.run) {
           // ラン中はショップ／イベントからしか手に入らない
-          state.message = 'ラン中の加護は、ショップとイベントから手に入ります';
+          state.message = '挑戦中の加護は、ショップとイベントから手に入ります';
           render();
           return;
         }
@@ -1453,7 +1547,7 @@ function renderEquipmentList(body: HTMLElement): void {
   body.appendChild(h('h3', 'inv-heading', '装備'));
 
   if (!run) {
-    body.appendChild(h('div', 'hint', 'ラン外では、すべての装備を自由に付け外しできます'));
+    body.appendChild(h('div', 'hint', 'プラクティスでは、すべての装備を自由に付け外しできます'));
     const all = h('div', 'blessings');
     for (const e of EQUIPMENT) {
       all.appendChild(equipmentRow(e.id, null));
@@ -1536,7 +1630,7 @@ function runHeader(run: RunState): HTMLElement {
   return h(
     'div',
     'run-status',
-    `${run.chapter}章 ／ ♥ ${run.life} ／ ${run.coins}c ／ 前衛${run.frontlineSlots}・サポ${run.supportSlots}`,
+    `${run.chapter}章 ／ ♥ ${run.life} ／ ${coinText(run.coins)} ／ 前衛${run.frontlineSlots}・サポ${run.supportSlots}`,
   );
 }
 
@@ -1549,14 +1643,14 @@ function renderResultScreen(main: HTMLElement): void {
   if (run && run.phase === 'clear') {
     panel.appendChild(h('div', 'screen-title win', 'クリア！'));
     panel.appendChild(h('div', 'screen-text', '最終章のボスを倒した。'));
-    panel.appendChild(btn('新しいランを始める', true, startRun, 'next-btn'));
+    panel.appendChild(btn('新しい挑戦を始める', true, startRun, 'next-btn'));
     main.appendChild(panel);
     return;
   }
   if (run && run.phase === 'gameover') {
     panel.appendChild(h('div', 'screen-title lose', 'ゲームオーバー'));
     panel.appendChild(h('div', 'screen-text', 'ライフが尽きた。'));
-    panel.appendChild(btn('新しいランを始める', true, startRun, 'next-btn'));
+    panel.appendChild(btn('新しい挑戦を始める', true, startRun, 'next-btn'));
     main.appendChild(panel);
     return;
   }
@@ -1568,6 +1662,68 @@ function renderResultScreen(main: HTMLElement): void {
   panel.appendChild(block);
   if (run) panel.appendChild(runHeader(run));
   panel.appendChild(btn(info?.retry ? '再挑戦' : '次へ', false, afterResult, 'next-btn'));
+  main.appendChild(panel);
+}
+
+/** タイトル画面（プラクティス / 挑戦 の選択） */
+function renderTitleScreen(main: HTMLElement): void {
+  const panel = h('div', 'screen-panel title-screen');
+  panel.appendChild(h('div', 'title-logo', 'Divine Pawns（仮題）'));
+  panel.appendChild(h('div', 'title-sub', '神話オートバトラー・ローグライク'));
+
+  if (state.askResume && state.savedRun) {
+    const sv = state.savedRun;
+    panel.appendChild(h('div', 'screen-text', '途中の挑戦があります。続きから遊びますか？'));
+    panel.appendChild(
+      h('div', 'run-status', `${sv.chapter}章 ／ ♥ ${sv.life} ／ ${coinText(sv.coins)}`),
+    );
+    const row = h('div', 'row');
+    row.appendChild(btn('続きから', true, () => resumeRun(sv), 'title-btn'));
+    row.appendChild(
+      btn(
+        '最初から',
+        false,
+        () => {
+          clearRun();
+          state.savedRun = null;
+          startRun();
+        },
+        'title-btn',
+      ),
+    );
+    panel.appendChild(row);
+    panel.appendChild(
+      btn(
+        '戻る',
+        false,
+        () => {
+          state.askResume = false;
+          render();
+        },
+        'title-back',
+      ),
+    );
+    main.appendChild(panel);
+    return;
+  }
+
+  const practice = btn('プラクティス', false, startPractice, 'title-btn wide');
+  practice.setAttribute('data-title-action', 'practice');
+  panel.appendChild(practice);
+  panel.appendChild(
+    h('div', 'title-note', '全キャラ・全装備・全加護を自由に試せます（挑戦には影響しません）'),
+  );
+
+  const challenge = btn('挑戦', true, chooseChallenge, 'title-btn wide');
+  challenge.setAttribute('data-title-action', 'challenge');
+  panel.appendChild(challenge);
+  panel.appendChild(
+    h(
+      'div',
+      'title-note',
+      state.savedRun ? '途中の挑戦があります（続きから遊べます）' : '章1から本編を始めます',
+    ),
+  );
   main.appendChild(panel);
 }
 
@@ -1601,7 +1757,8 @@ function renderShopScreen(main: HTMLElement): void {
         ),
       );
     }
-    const b = btn(slot.sold ? '売切' : `${slot.item.price}c`, false, () => {
+    const affordable = !slot.sold && run.coins >= slot.item.price;
+    const buy = (): void => {
       if (buyShopItem(run, i, runCfg)) {
         state.runMessage = `${name} を購入`;
         autoSave();
@@ -1609,7 +1766,10 @@ function renderShopScreen(main: HTMLElement): void {
         state.runMessage = 'コインが足りないか、もう買えません';
       }
       render();
-    });
+    };
+    const b = slot.sold
+      ? btn('売切', false, buy)
+      : priceBtn('', slot.item.price, affordable, buy);
     b.disabled = slot.sold || run.coins < slot.item.price;
     row.appendChild(b);
     list.appendChild(row);
@@ -1617,7 +1777,7 @@ function renderShopScreen(main: HTMLElement): void {
   panel.appendChild(list);
 
   const row = h('div', 'row');
-  const rb = btn(`リロール ${shop.rerollCost}c`, false, () => {
+  const rb = priceBtn('リロール', shop.rerollCost, run.coins >= shop.rerollCost, () => {
     if (rerollShop(run, runCfg)) {
       state.runMessage = '品を引き直した';
       autoSave();
@@ -1650,7 +1810,7 @@ function rewardLabel(r: { kind: string; amount?: number }): string {
     case 'character':
       return '仲間';
     case 'star':
-      return 'ランクアップ';
+      return '★アップ';
     case 'life':
       return 'ライフ';
     case 'sixthSlot':
@@ -1743,16 +1903,29 @@ function renderEventScreen(main: HTMLElement): void {
   main.appendChild(panel);
 }
 
-/** 「ラン」タブ：進行状況の確認だけ */
+/** 「進行」タブ：挑戦の進み具合の確認だけ */
 function renderRunTab(body: HTMLElement): void {
   const run = state.run;
 
   if (!run) {
+    if (state.mode === 'practice') {
+      body.appendChild(
+        h('div', 'hint', 'プラクティス中です。ここでの編成と戦闘は、挑戦の記録に影響しません'),
+      );
+      if (state.savedRun) {
+        const sv = state.savedRun;
+        body.appendChild(
+          h('div', 'run-status', `途中の挑戦: ${sv.chapter}章 ／ ♥ ${sv.life} ／ ${coinText(sv.coins)}`),
+        );
+      }
+      body.appendChild(btn('タイトルに戻る', false, goTitle));
+      return;
+    }
     if (state.savedRun) {
       const sv = state.savedRun;
-      body.appendChild(h('div', 'hint', '保存されたランがあります。再開しますか？'));
+      body.appendChild(h('div', 'hint', '途中の挑戦があります。再開しますか？'));
       body.appendChild(
-        h('div', 'run-status', `${sv.chapter}章 / ライフ ${sv.life} / コイン ${sv.coins}`),
+        h('div', 'run-status', `${sv.chapter}章 / ライフ ${sv.life} / ${coinText(sv.coins)}`),
       );
       const row = h('div', 'row');
       row.appendChild(btn('再開する', true, () => resumeRun(sv)));
@@ -1761,9 +1934,9 @@ function renderRunTab(body: HTMLElement): void {
       return;
     }
     body.appendChild(
-      h('div', 'hint', 'ランを始めると、章の進行（戦闘→ショップ→イベント）が動きます'),
+      h('div', 'hint', '挑戦を始めると、章の進行（戦闘→ショップ→イベント）が動きます'),
     );
-    body.appendChild(btn('▶ 新しいランを始める', true, startRun));
+    body.appendChild(btn('▶ 新しい挑戦を始める', true, startRun));
     if (state.runMessage) body.appendChild(h('div', 'hint', state.runMessage));
     return;
   }
@@ -1780,7 +1953,8 @@ function renderRunTab(body: HTMLElement): void {
     body.appendChild(h('div', 'hint', run.phase === 'clear' ? 'クリア済み' : 'ゲームオーバー'));
   }
   const foot = h('div', 'row');
-  foot.appendChild(btn('ランをやめる', false, abandonRun));
+  foot.appendChild(btn('挑戦を中断してタイトルへ', false, goTitle));
+  foot.appendChild(btn('挑戦をやめる', false, abandonRun));
   body.appendChild(foot);
 }
 
@@ -1790,6 +1964,18 @@ function renderRunTab(body: HTMLElement): void {
 
 function renderControlTab(body: HTMLElement): void {
   const rep = state.replay;
+
+  body.appendChild(h('div', 'hint', 'ゲーム'));
+  const titleRow = h('div', 'row');
+  const toTitle = btn(
+    state.mode === 'challenge' ? '挑戦を中断してタイトルへ' : 'タイトルに戻る',
+    false,
+    goTitle,
+  );
+  toTitle.setAttribute('data-action', 'to-title');
+  toTitle.disabled = state.screen === 'battle';
+  titleRow.appendChild(toTitle);
+  body.appendChild(titleRow);
 
   body.appendChild(h('div', 'hint', '再生'));
   const play = h('div', 'row');
@@ -2260,16 +2446,23 @@ function render(): void {
       rep
         ? `${activeEncounterId()} t=${rep.frames[Math.min(state.frame, rep.frames.length - 1)]!.t.toFixed(1)}s`
         : run
-          ? `${run.chapter}章 ♥${run.life} ${run.coins}c`
-          : `${activeEncounterId()} / ${state.seed}`,
+          ? `${run.chapter}章 ♥${run.life}`
+          : state.mode === 'practice'
+            ? `プラクティス ${activeEncounterId()}`
+            : '',
     ),
   );
+  // 所持コインは常に見える位置に出す（挑戦中のみ）
+  if (run) header.appendChild(coinChip(run.coins));
+  state.lastCoins = run ? run.coins : null;
   root.appendChild(header);
 
   // メイン画面。盤面を出すのは「戦闘準備中」と「戦闘実行中」だけ
   const main = h('div', 'board-area');
   main.dataset.screen = state.screen;
-  if (showsBoard(state.screen)) {
+  if (state.screen === 'title') {
+    renderTitleScreen(main);
+  } else if (showsBoard(state.screen)) {
     main.appendChild(renderBoard());
   } else if (state.screen === 'result') {
     renderResultScreen(main);
@@ -2280,12 +2473,12 @@ function render(): void {
   }
   root.appendChild(main);
 
-  renderBottomBar(root);
+  // タイトル画面では下部バーを出さない
+  if (state.screen !== 'title') renderBottomBar(root);
   renderSheets(root);
 }
 
-// 保存されたランがあれば、再開するか聞く
+// 保存された挑戦があれば覚えておく（タイトルで「挑戦」を選んだ時に聞く）
 state.savedRun = loadRun();
-if (state.savedRun) state.tab = 'run';
 
 render();

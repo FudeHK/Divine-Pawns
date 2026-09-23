@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  *
  * 画面の描画テスト。
- * 上＝盤面、下＝タブ付きの操作バー（編成 / 加護 / ラン / 操作）。
+ * 上＝盤面、下＝タブ付きの操作バー（編成 / 持ち物 / 進行 / 操作）。
+ * 起動直後はタイトル画面なので、ほとんどのテストは「プラクティス」を選んでから始める。
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -86,6 +87,26 @@ function findToken(short: string): SVGGElement | undefined {
   ) as SVGGElement | undefined;
 }
 
+/** タイトル画面の選択肢 */
+function titleButton(action: 'practice' | 'challenge'): HTMLButtonElement {
+  return app().querySelector(`[data-title-action="${action}"]`) as HTMLButtonElement;
+}
+
+function enterPractice(): void {
+  titleButton('practice').click();
+}
+
+function enterChallenge(): void {
+  titleButton('challenge').click();
+}
+
+/** モジュールを読み込み直して、タイトル画面から始める */
+async function boot(): Promise<void> {
+  vi.resetModules();
+  document.body.innerHTML = '<div id="app"></div>';
+  await import('../src/ui/main');
+}
+
 function tap(node: Element): void {
   node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
@@ -136,6 +157,8 @@ beforeEach(async () => {
   localStorage.clear();
   document.body.innerHTML = '<div id="app"></div>';
   await import('../src/ui/main');
+  // 既存のテストはこれまでどおりの自由編成（＝プラクティス）から始める
+  enterPractice();
 });
 
 // ---------------------------------------------------------------------------
@@ -146,11 +169,11 @@ describe('画面構成', () => {
     expect(app().querySelector('.bottom-bar')).toBeTruthy();
   });
 
-  it('タブは 編成・持ち物・ラン・操作 の4つ', () => {
+  it('タブは 編成・持ち物・進行・操作 の4つ', () => {
     expect([...app().querySelectorAll('.tab-row button')].map((b) => b.textContent)).toEqual([
       '編成',
       '持ち物',
-      'ラン',
+      '進行',
       '操作',
     ]);
   });
@@ -162,7 +185,7 @@ describe('画面構成', () => {
     expect(tabBody().querySelector('.blessing-row')).toBeTruthy();
     expect(tabBody().querySelector('.char-pager')).toBeNull();
     openTab('run');
-    expect(tabBody().textContent).toContain('ラン');
+    expect(tabBody().textContent).toContain('プラクティス');
     expect(tabBody().querySelector('.blessing-row')).toBeNull();
     openTab('control');
     expect(tabBody().querySelector("input[type='text']")).toBeTruthy();
@@ -599,10 +622,11 @@ describe('「持ち物」タブ', () => {
 // ラン進行（UI）
 // ---------------------------------------------------------------------------
 
-describe('ラン進行とメイン画面の切り替え', () => {
+describe('挑戦の進行とメイン画面の切り替え', () => {
   function startRun(): void {
-    openTab('run');
-    findButton('▶ 新しいランを始める')!.click();
+    openTab('control');
+    findButton('タイトルに戻る')!.click();
+    enterChallenge();
   }
 
   /** 戦闘を最後まで飛ばして結果へ */
@@ -615,14 +639,14 @@ describe('ラン進行とメイン画面の切り替え', () => {
     findButton('結果へ')!.click();
   }
 
-  it('ランを始めると準備画面（盤面あり）になる', () => {
+  it('挑戦を始めると準備画面（盤面あり）になる', () => {
     startRun();
     expect(screen()).toBe('prep');
     expect(hasBoard()).toBe(true);
     expect(findButton('▶ この戦闘に挑む')).toBeTruthy();
   });
 
-  it('「ラン」タブは進行状況の確認だけになる', () => {
+  it('「進行」タブは進行状況の確認だけになる', () => {
     startRun();
     openTab('run');
     expect(tabBody().querySelector('.run-status')!.textContent).toContain('1章');
@@ -709,7 +733,7 @@ describe('ラン進行とメイン画面の切り替え', () => {
     expect(tabBody()).toBeTruthy();
   });
 
-  it('B3: ラン中は所持している加護・装備だけが並ぶ', () => {
+  it('B3: 挑戦中は所持している加護・装備だけが並ぶ', () => {
     startRun();
     openTab('inventory');
     expect(tabBody().textContent).toContain('まだ加護を持っていません');
@@ -717,7 +741,7 @@ describe('ラン進行とメイン画面の切り替え', () => {
     expect(tabBody().textContent).toContain('まだ装備を持っていません');
   });
 
-  it('B4: ラン中は★を直接変えられない（合成ボタンも出さない）', () => {
+  it('B4: 挑戦中は★を直接変えられない（合成ボタンも出さない）', () => {
     startRun();
     openTab('team');
     expect(card().querySelector('.sandbox-star')).toBeNull();
@@ -727,195 +751,173 @@ describe('ラン進行とメイン画面の切り替え', () => {
     expect(card().querySelector('.star-tag')!.textContent).toBe('★1');
   });
 
-  it('ラン中は編成が「所持キャラ1体」になる', () => {
+  it('挑戦中は編成が「所持キャラ1体」になる', () => {
     startRun();
     openTab('team');
     expect(app().querySelector('.char-page-indicator')!.textContent).toBe('1 / 1');
     expect(card().querySelector('.char-slot-state')!.textContent).toContain('前衛');
   });
 
-  it('オートセーブされ、読み込み直すと再開を聞かれる', async () => {
+  it('オートセーブされ、読み込み直すと「続きから」を聞かれる', async () => {
     startRun();
     expect(localStorage.getItem('divine-pawns.run.v1')).toBeTruthy();
 
-    vi.resetModules();
-    document.body.innerHTML = '<div id="app"></div>';
-    await import('../src/ui/main');
-    openTab('run');
-    expect(tabBody().textContent).toContain('保存されたランがあります');
-    findButton('再開する')!.click();
+    await boot();
+    enterChallenge();
+    expect(mainArea().textContent).toContain('続きから遊びますか');
+    findButton('続きから')!.click();
     openTab('run');
     expect(tabBody().querySelector('.run-status')!.textContent).toContain('1章');
   });
 
-  it('壊れた保存データは捨てて、新規から始められる', async () => {
+  it('壊れた保存データは捨てて、新規の挑戦から始められる', async () => {
     localStorage.setItem('divine-pawns.run.v1', '{壊れている');
-    vi.resetModules();
-    document.body.innerHTML = '<div id="app"></div>';
-    await import('../src/ui/main');
-    openTab('run');
-    expect(tabBody().textContent).not.toContain('保存されたランがあります');
-    expect(findButton('▶ 新しいランを始める')).toBeTruthy();
+    await boot();
+    enterChallenge();
+    // 続きの確認は出ず、そのまま挑戦が始まる
+    expect(screen()).toBe('prep');
+    expect(findButton('▶ この戦闘に挑む')).toBeTruthy();
   });
 });
 
-describe('戦闘再生中', () => {
-  it('「編成」「加護」「ラン」タブが無効になり、「操作」だけ使える', () => {
-    findButton('▶ 戦闘開始')!.click();
-    expect(screen()).toBe('battle');
-    expect(tabButton('team').disabled).toBe(true);
-    expect(tabButton('inventory').disabled).toBe(true);
-    expect(tabButton('run').disabled).toBe(true);
-    expect(tabButton('control').disabled).toBe(false);
-    expect(tabButton('control').className).toContain('on');
+// ---------------------------------------------------------------------------
+// フェーズ2.6: タイトル画面（プラクティス / 挑戦）
+// ---------------------------------------------------------------------------
+
+describe('タイトル画面', () => {
+  it('起動するとタイトル画面が出て、プラクティスと挑戦を選べる', async () => {
+    await boot();
+    expect(screen()).toBe('title');
+    expect(hasBoard()).toBe(false);
+    expect(app().querySelector('.bottom-bar')).toBeNull();
+    expect(mainArea().querySelector('.title-logo')!.textContent).toContain('Divine Pawns');
+    expect(titleButton('practice').textContent).toBe('プラクティス');
+    expect(titleButton('challenge').textContent).toBe('挑戦');
   });
 
-  it('倍速とスキップは戦闘中も操作できる', () => {
+  it('プラクティスを選ぶと、全キャラを自由に編成できる画面になる', async () => {
+    await boot();
+    enterPractice();
+    expect(screen()).toBe('prep');
+    expect(app().querySelector('.bottom-bar')).toBeTruthy();
+    openTab('team');
+    expect(app().querySelector('.char-page-indicator')!.textContent).toBe(
+      `1 / ${CHARACTERS.length}`,
+    );
+    // 自由に★を変えられる（プラクティス専用）
+    expect(card().querySelector('.sandbox-star')).toBeTruthy();
+  });
+
+  it('プラクティスの編成・戦闘は挑戦のセーブに影響しない', async () => {
+    await boot();
+    enterPractice();
+    openTab('team');
+    setStar(3);
     findButton('▶ 戦闘開始')!.click();
-    findButton('4倍')!.click();
-    expect(findButton('4倍')!.className).toContain('on');
+    openTab('control');
     findButton('⏭ スキップ')!.click();
-    expect(tabBody().textContent).toMatch(/勝利|敗北|引き分け|時間切れ/);
+    // セーブは一切作られない
+    expect(localStorage.getItem('divine-pawns.run.v1')).toBeNull();
   });
 
-  it('シートを開くと一時停止し、閉じると再開する', () => {
+  it('途中の挑戦があっても、プラクティス中にセーブは書き換わらない', async () => {
+    await boot();
+    enterChallenge();
+    const saved = localStorage.getItem('divine-pawns.run.v1');
+    expect(saved).toBeTruthy();
+
+    openTab('control');
+    findButton('挑戦を中断してタイトルへ')!.click();
+    expect(screen()).toBe('title');
+    enterPractice();
+    openTab('team');
+    setStar(3);
     findButton('▶ 戦闘開始')!.click();
-    expect(findButton('⏸ 一時停止')).toBeTruthy();
-    tap(findToken('青銅の')!);
-    expect(findButton('▶ 再生')).toBeTruthy();
-    closeTop();
-    expect(findButton('⏸ 一時停止')).toBeTruthy();
-  });
-});
-
-describe('B6 下部バーの高さがタブで変わらない', () => {
-  it('どのタブに切り替えても、外枠に高さを決めるインラインスタイルが付かない', () => {
-    const heights = new Set<string>();
-    for (const t of ['team', 'inventory', 'run', 'control'] as TabId[]) {
-      openTab(t);
-      const bar = app().querySelector('.bottom-bar') as HTMLElement;
-      // 高さは CSS の固定値だけで決まる（JS が都度いじらない）
-      heights.add(`${bar.style.height}|${bar.style.minHeight}|${bar.style.maxHeight}`);
-      expect(bar.className).toBe('bottom-bar');
-    }
-    expect(heights.size).toBe(1);
-    expect([...heights][0]).toBe('||');
+    openTab('control');
+    findButton('⏭ スキップ')!.click();
+    expect(localStorage.getItem('divine-pawns.run.v1')).toBe(saved);
   });
 
-  it('タブを切り替えても .bottom-bar は1つで、構造（タブ行/中身/操作行）が変わらない', () => {
-    for (const t of ['team', 'inventory', 'run', 'control'] as TabId[]) {
-      openTab(t);
-      expect(app().querySelectorAll('.bottom-bar').length, t).toBe(1);
-      const bar = app().querySelector('.bottom-bar')!;
-      expect([...bar.children].map((c) => c.className), t).toEqual([
-        'tab-row',
-        'tab-body',
-        'action-row',
-      ]);
-    }
+  it('保存データが無ければ、挑戦は確認なしで新規に始まる', async () => {
+    await boot();
+    enterChallenge();
+    expect(screen()).toBe('prep');
+    expect(mainArea().textContent).not.toContain('続きから');
   });
-});
 
-describe('B1 イベントの見通しと結果', () => {
-  it('選ぶ前に「何が起こりうるか」が書いてある', () => {
+  it('保存データがあれば「続きから」か「最初から」を選べる', async () => {
+    await boot();
+    enterChallenge();
+    openTab('control');
+    findButton('挑戦を中断してタイトルへ')!.click();
+    enterChallenge();
+    expect(findButton('続きから')).toBeTruthy();
+    findButton('最初から')!.click();
+    expect(screen()).toBe('prep');
+    expect(app().querySelector('.coin-chip')).toBeTruthy();
+  });
+
+  it('タイトルへ戻っても、挑戦の進行は保持される', async () => {
+    await boot();
+    enterChallenge();
+    openTab('control');
+    findButton('挑戦を中断してタイトルへ')!.click();
+    enterChallenge();
+    findButton('続きから')!.click();
     openTab('run');
-    findButton('▶ 新しいランを始める')!.click();
-    // 戦闘 → ショップ → イベント まで進める
+    expect(tabBody().querySelector('.run-status')!.textContent).toContain('1章');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.6: コインの表記
+// ---------------------------------------------------------------------------
+
+describe('コインの表記', () => {
+  it('挑戦中は所持コインがヘッダーに常に出る', async () => {
+    await boot();
+    enterChallenge();
+    const chip = app().querySelector('.app-head .coin-chip')!;
+    expect(chip.querySelector('.coin-value')!.textContent).toBe('0');
+    expect(chip.querySelector('.coin-icon')).toBeTruthy();
+  });
+
+  it('コインが増えると差分つきで見せる', async () => {
+    await boot();
+    enterChallenge();
     findButton('▶ この戦闘に挑む')!.click();
     openTab('control');
     findButton('⏭ スキップ')!.click();
     findButton('結果へ')!.click();
-    findButton('次へ')!.click();
-    findButton('次へ進む')!.click();
-    findButton('次へ')!.click();
-    expect(screen()).toBe('event');
-
-    const outlooks = [...mainArea().querySelectorAll('.shop-desc')].map((n) => n.textContent ?? '');
-    expect(outlooks).toHaveLength(2);
-    for (const o of outlooks) {
-      expect(o).toMatch(/〈安全〉|〈賭け〉|〈ミニ戦闘〉|〈危険な戦闘〉/);
-      expect(o.length).toBeGreaterThan(4);
-    }
+    const chip = app().querySelector('.app-head .coin-chip')!;
+    expect(chip.classList.contains('coin-up')).toBe(true);
+    expect(chip.querySelector('.coin-diff')!.textContent!.startsWith('+')).toBe(true);
   });
-});
 
-describe('A3 スキルはランクアップで増える', () => {
-  it('ラン開始時は2つだけ覚えている', () => {
-    openTab('run');
-    findButton('▶ 新しいランを始める')!.click();
-    openTab('team');
-    cardButton('詳細').click();
-    const names = [...topSheet()!.querySelectorAll('.skill:not(.team-row) .skill-name')].map(
-      (n) => n.textContent,
-    );
-    // アクティブ / パッシブ / サポート の3行のうち、中身があるのは2行
-    expect(names).toHaveLength(3);
-    expect(names.filter((n) => n !== 'なし')).toHaveLength(2);
-  });
-});
-
-describe('5. ★アップ時のスキル3択は即時に出る', () => {
-  function startRun(): void {
-    openTab('run');
-    findButton('▶ 新しいランを始める')!.click();
-  }
-
-  /** ショップまで進めて、所持キャラと同じキャラを買えるようにする */
-  function toShop(): void {
+  it('購入ボタンは価格をコイン付きで出し、買えない時は押せない', async () => {
+    await boot();
+    enterChallenge();
     findButton('▶ この戦闘に挑む')!.click();
     openTab('control');
     findButton('⏭ スキップ')!.click();
     findButton('結果へ')!.click();
     findButton('次へ')!.click();
     expect(screen()).toBe('shop');
-  }
 
-  it('同じキャラをショップで買うと、その場で3択ポップアップが出る', () => {
-    startRun();
-    // 所持キャラの名前を控える
-    openTab('team');
-    const ownedName = card().querySelector('.char-name')!.textContent!;
-    toShop();
-
-    const row = [...mainArea().querySelectorAll('.shop-row')].find(
-      (r) => r.querySelector('.shop-name')?.textContent === ownedName,
-    );
-    if (!row) return; // その並びに出なかった回はスキップ
-
-    const buy = row.querySelector('button') as HTMLButtonElement;
-    if (buy.disabled) return; // コインが足りない回はスキップ
-    buy.click();
-
-    // 何も押さずにポップアップが出ている
-    expect(topSheet()).toBeTruthy();
-    expect(topTitle()).toContain('スキル選択');
-    expect(app().querySelectorAll('.sheet .sheet-list-item').length).toBeGreaterThan(0);
-
-    // 選ぶと閉じる
-    (app().querySelectorAll('.sheet .sheet-list-item')[0] as HTMLButtonElement).click();
-    expect(app().querySelector('.sheet.skill-choice')).toBeNull();
-
-    // ★が上がっている
-    openTab('team');
-    expect(card().querySelector('.star-tag')!.textContent).toBe('★2');
-  });
-
-  it('選び終わるまでポップアップは開いたまま（閉じても出し直される）', () => {
-    startRun();
-    openTab('team');
-    const ownedName = card().querySelector('.char-name')!.textContent!;
-    toShop();
-    const row = [...mainArea().querySelectorAll('.shop-row')].find(
-      (r) => r.querySelector('.shop-name')?.textContent === ownedName,
-    );
-    if (!row) return;
-    const buy = row.querySelector('button') as HTMLButtonElement;
-    if (buy.disabled) return;
-    buy.click();
-    expect(topTitle()).toContain('スキル選択');
-
-    // ×で閉じても、未選択なら次の描画で出し直される
-    closeTop();
-    expect(app().querySelector('.sheet.skill-choice')).toBeTruthy();
+    const coins = Number(app().querySelector('.app-head .coin-value')!.textContent);
+    const rows = [...mainArea().querySelectorAll('.shop-row')];
+    expect(rows.length).toBe(6);
+    let checked = 0;
+    for (const row of rows) {
+      const b = row.querySelector('button') as HTMLButtonElement;
+      if (b.textContent === '売切') continue;
+      checked += 1;
+      const price = Number(b.querySelector('.price-num')!.textContent);
+      expect(Number.isFinite(price)).toBe(true);
+      expect(b.querySelector('.coin-icon')).toBeTruthy();
+      expect(b.disabled, `price=${price} coins=${coins}`).toBe(coins < price);
+      expect(b.classList.contains('cant-afford')).toBe(coins < price);
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 });

@@ -1030,3 +1030,137 @@ select {
   font-size: var(--font-sub);
   color: var(--accent);
 }
+
+/* --- タイトル画面 --- */
+
+.title-screen {
+  align-items: stretch;
+  text-align: center;
+  gap: 10px;
+}
+
+.title-logo {
+  font-size: var(--font-title);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.title-sub {
+  font-size: var(--font-sub);
+  color: var(--muted);
+}
+
+.title-btn {
+  min-height: 52px;
+  font-size: var(--font-heading);
+  font-weight: 700;
+}
+
+.title-note {
+  font-size: var(--font-sub);
+  color: var(--muted);
+  margin-top: -4px;
+}
+
+.title-back {
+  align-self: center;
+  min-width: 96px;
+}
+
+/* --- コイン表記 --- */
+
+.coin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: var(--font-num);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.coin-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.coin-diff {
+  font-size: var(--font-sub);
+}
+
+.coin-chip.coin-up {
+  animation: coin-pop 0.5s ease-out;
+}
+
+.coin-chip.coin-down {
+  animation: coin-drop 0.5s ease-out;
+}
+
+.coin-chip.coin-up .coin-diff {
+  color: var(--ok);
+}
+
+.coin-chip.coin-down .coin-diff {
+  color: var(--enemy);
+}
+
+@keyframes coin-pop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 var(--accent);
+  }
+  40% {
+    transform: scale(1.18);
+    box-shadow: 0 0 10px 0 var(--accent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@keyframes coin-drop {
+  0% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(3px);
+    filter: brightness(0.7);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* 価格つきボタン（ショップの購入・リロール） */
+.price-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.price-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: var(--font-num);
+}
+
+.price-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 買えない時は一目で分かるようにする */
+.price-btn.cant-afford,
+.price-btn:disabled {
+  opacity: 0.45;
+  filter: grayscale(0.8);
+  cursor: not-allowed;
+}
