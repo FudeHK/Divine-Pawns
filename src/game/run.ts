@@ -38,10 +38,14 @@ export const RUN_VERSION = 1;
 export const learnedSkillIds = learnedSkills;
 
 /** 章ごとの通常戦の遭遇（仮） */
+/**
+ * 章ごとの通常戦。章が進むほど敵の顔ぶれが変わる。
+ * 1戦目の E1 だけは「所持キャラ1体でも勝てる足慣らし」なので固定。
+ */
 const CHAPTER_BATTLES: Record<number, string[]> = {
-  1: ['E1', 'E2'],
-  2: ['E3', 'E4'],
-  3: ['E4', 'B1'],
+  1: ['E1', 'C1B'],
+  2: ['C2A', 'C2B'],
+  3: ['C3A', 'C3B'],
 };
 const BOSS_ENCOUNTER = 'B1';
 
@@ -278,11 +282,18 @@ export function rollShop(
   const perKind = 2 + (boss ? cfg.bossExtraPerKind : 0);
   const items: ShopItem[] = [];
 
-  const charPool = availableCharacters(run);
-  for (let i = 0; i < perKind && charPool.length > 0; i++) {
+  // キャラ候補は重複させない。足りない分は装備の枠に振り替える（品数は減らさない）
+  const charPool = [...availableCharacters(run)];
+  let extraEquipment = 0;
+  for (let i = 0; i < perKind; i++) {
+    if (charPool.length === 0) {
+      extraEquipment += 1;
+      continue;
+    }
+    const [c] = charPool.splice(rng.nextInt(charPool.length), 1);
     items.push({
       kind: 'character',
-      charId: rng.pick(charPool).id,
+      charId: c!.id,
       price: priceOf(cfg.price.character, boss, cfg),
     });
   }
@@ -299,7 +310,7 @@ export function rollShop(
     });
   }
   const weights = boss ? cfg.equipmentTierWeights.boss : cfg.equipmentTierWeights.normal;
-  for (let i = 0; i < perKind; i++) {
+  for (let i = 0; i < perKind + extraEquipment; i++) {
     const tier = pickTier(rng, weights);
     const pool = EQUIPMENT.filter((e) => e.tier === tier);
     const eq = rng.pick(pool.length > 0 ? pool : EQUIPMENT);

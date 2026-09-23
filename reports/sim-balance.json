@@ -1,9 +1,9 @@
 {
   "loadouts": 1000,
-  "battles": 6000,
-  "avgDuration": 10.99,
+  "battles": 11000,
+  "avgDuration": 13.26,
   "timeoutRate": 0,
-  "overallWinRate": 95.97,
+  "overallWinRate": 93.65,
   "perEncounter": [
     {
       "encounter": "E0",
@@ -46,6 +46,46 @@
       "avgAllyDps": 308.1
     },
     {
+      "encounter": "C1B",
+      "battles": 1000,
+      "winRate": 93.6,
+      "avgDuration": 13.75,
+      "timeoutRate": 0,
+      "avgAllyDps": 297.6
+    },
+    {
+      "encounter": "C2A",
+      "battles": 1000,
+      "winRate": 94.4,
+      "avgDuration": 12.61,
+      "timeoutRate": 0,
+      "avgAllyDps": 311.7
+    },
+    {
+      "encounter": "C2B",
+      "battles": 1000,
+      "winRate": 85.6,
+      "avgDuration": 18.38,
+      "timeoutRate": 0,
+      "avgAllyDps": 288.3
+    },
+    {
+      "encounter": "C3A",
+      "battles": 1000,
+      "winRate": 93.6,
+      "avgDuration": 17.04,
+      "timeoutRate": 0,
+      "avgAllyDps": 307.9
+    },
+    {
+      "encounter": "C3B",
+      "battles": 1000,
+      "winRate": 87.1,
+      "avgDuration": 18.13,
+      "timeoutRate": 0,
+      "avgAllyDps": 317.9
+    },
+    {
       "encounter": "B1",
       "battles": 1000,
       "winRate": 95,
@@ -59,45 +99,45 @@
       "style": "elite",
       "label": "少数精鋭（前衛2・サポート1に集中投資）",
       "runs": 200,
-      "clears": 25,
-      "clearRate": 12.5,
+      "clears": 23,
+      "clearRate": 11.5,
       "avgReachedChapter": 1.62,
-      "avgBattleWinRate": 45.9,
+      "avgBattleWinRate": 45.5,
       "avgRoster": 1.54,
-      "avgMaxStar": 1.71
+      "avgMaxStar": 1.72
     },
     {
       "style": "wide",
       "label": "多キャラ（枠いっぱいに広く編成）",
       "runs": 200,
-      "clears": 23,
-      "clearRate": 11.5,
-      "avgReachedChapter": 2.04,
-      "avgBattleWinRate": 54,
-      "avgRoster": 4.66,
-      "avgMaxStar": 2.09
+      "clears": 22,
+      "clearRate": 11,
+      "avgReachedChapter": 2.03,
+      "avgBattleWinRate": 53.9,
+      "avgRoster": 4.86,
+      "avgMaxStar": 2
     }
   ],
   "dpsByElement": [
     {
       "element": "fire",
-      "avgDps": 332.1,
-      "share": 36
+      "avgDps": 262.5,
+      "share": 37.1
     },
     {
       "element": "ice",
-      "avgDps": 136.2,
-      "share": 14.6
+      "avgDps": 101.5,
+      "share": 14.2
     },
     {
       "element": "wood",
-      "avgDps": 117.9,
-      "share": 12.1
+      "avgDps": 104.8,
+      "share": 14.4
     },
     {
       "element": "lightning",
-      "avgDps": 331.3,
-      "share": 37.3
+      "avgDps": 238.6,
+      "share": 34.3
     }
   ]
 }

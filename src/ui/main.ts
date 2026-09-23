@@ -437,10 +437,10 @@ function freeCell(): Hex | null {
 // 盤面の描画
 // ---------------------------------------------------------------------------
 
-const BOARD_W = 360;
+export const BOARD_W = 360;
 const SQ3 = Math.sqrt(3);
 const R = (BOARD_W - 4) / (SQ3 * 5.5);
-const BOARD_H = 1.5 * R * 5 + 2 * R + 4;
+export const BOARD_H = 1.5 * R * 5 + 2 * R + 4;
 
 /** 「編成」タブで表示中のキャラを示す色（戦闘中の表示とは別色） */
 const FOCUS_COLOR = '#ff7ae0';
@@ -974,9 +974,17 @@ function pumpSkillChoice(): boolean {
   return true;
 }
 
+/** 挑戦ごとに新しいシードを作る（同じシードなら初期キャラまで同じになる） */
+function newChallengeSeed(): string {
+  const rand = Math.floor(Math.random() * 0xffffffff).toString(36);
+  return `ch-${Date.now().toString(36)}-${rand}`;
+}
+
 function startRun(): void {
   state.mode = 'challenge';
   state.askResume = false;
+  // 新しい挑戦のたびにシードを引き直す（初期キャラもここで決まる）
+  state.seed = newChallengeSeed();
   state.run = createRun(state.seed, runCfg);
   state.savedRun = null;
   state.cardIndex = 0;
@@ -1287,6 +1295,18 @@ function h(tag: string, cls?: string, text?: string): HTMLElement {
   if (cls) n.className = cls;
   if (text !== undefined) n.textContent = text;
   return n;
+}
+
+/** ライフのハート列（残り＝赤の塗り／失った分＝灰色の輪郭） */
+function lifeEl(life: number, maxLife = Math.max(runCfg.startLife, life)): HTMLElement {
+  const el = h('span', 'life-chip');
+  el.setAttribute('aria-label', `ライフ ${life} / ${maxLife}`);
+  for (let i = 0; i < maxLife; i++) {
+    const on = i < life;
+    el.appendChild(h('span', on ? 'heart on' : 'heart off', on ? '♥' : '♡'));
+  }
+  el.appendChild(h('span', 'life-num', String(life)));
+  return el;
 }
 
 /** コインの文字列（アイコン付き） */
@@ -1627,11 +1647,14 @@ function progressMapEl(run: RunState, animate = false): HTMLElement {
 }
 
 function runHeader(run: RunState): HTMLElement {
-  return h(
-    'div',
-    'run-status',
-    `${run.chapter}章 ／ ♥ ${run.life} ／ ${coinText(run.coins)} ／ 前衛${run.frontlineSlots}・サポ${run.supportSlots}`,
+  const el = h('div', 'run-status');
+  el.appendChild(h('span', 'rs-item', `${run.chapter}章`));
+  el.appendChild(lifeEl(run.life));
+  el.appendChild(h('span', 'rs-item coin-text', coinText(run.coins)));
+  el.appendChild(
+    h('span', 'rs-item', `前衛${run.frontlineSlots}・サポ${run.supportSlots}`),
   );
+  return el;
 }
 
 /** リザルト画面（戦闘結果・イベント結果を1画面にまとめる） */
@@ -1674,9 +1697,11 @@ function renderTitleScreen(main: HTMLElement): void {
   if (state.askResume && state.savedRun) {
     const sv = state.savedRun;
     panel.appendChild(h('div', 'screen-text', '途中の挑戦があります。続きから遊びますか？'));
-    panel.appendChild(
-      h('div', 'run-status', `${sv.chapter}章 ／ ♥ ${sv.life} ／ ${coinText(sv.coins)}`),
-    );
+    const st = h('div', 'run-status');
+    st.appendChild(h('span', 'rs-item', `${sv.chapter}章`));
+    st.appendChild(lifeEl(sv.life));
+    st.appendChild(h('span', 'rs-item coin-text', coinText(sv.coins)));
+    panel.appendChild(st);
     const row = h('div', 'row');
     row.appendChild(btn('続きから', true, () => resumeRun(sv), 'title-btn'));
     row.appendChild(
@@ -1914,9 +1939,11 @@ function renderRunTab(body: HTMLElement): void {
       );
       if (state.savedRun) {
         const sv = state.savedRun;
-        body.appendChild(
-          h('div', 'run-status', `途中の挑戦: ${sv.chapter}章 ／ ♥ ${sv.life} ／ ${coinText(sv.coins)}`),
-        );
+        const st = h('div', 'run-status');
+        st.appendChild(h('span', 'rs-item', `途中の挑戦: ${sv.chapter}章`));
+        st.appendChild(lifeEl(sv.life));
+        st.appendChild(h('span', 'rs-item coin-text', coinText(sv.coins)));
+        body.appendChild(st);
       }
       body.appendChild(btn('タイトルに戻る', false, goTitle));
       return;
@@ -1924,9 +1951,11 @@ function renderRunTab(body: HTMLElement): void {
     if (state.savedRun) {
       const sv = state.savedRun;
       body.appendChild(h('div', 'hint', '途中の挑戦があります。再開しますか？'));
-      body.appendChild(
-        h('div', 'run-status', `${sv.chapter}章 / ライフ ${sv.life} / ${coinText(sv.coins)}`),
-      );
+      const st = h('div', 'run-status');
+      st.appendChild(h('span', 'rs-item', `${sv.chapter}章`));
+      st.appendChild(lifeEl(sv.life));
+      st.appendChild(h('span', 'rs-item coin-text', coinText(sv.coins)));
+      body.appendChild(st);
       const row = h('div', 'row');
       row.appendChild(btn('再開する', true, () => resumeRun(sv)));
       row.appendChild(btn('破棄して新規', false, abandonRun));
@@ -2446,14 +2475,17 @@ function render(): void {
       rep
         ? `${activeEncounterId()} t=${rep.frames[Math.min(state.frame, rep.frames.length - 1)]!.t.toFixed(1)}s`
         : run
-          ? `${run.chapter}章 ♥${run.life}`
+          ? `${run.chapter}章`
           : state.mode === 'practice'
             ? `プラクティス ${activeEncounterId()}`
             : '',
     ),
   );
-  // 所持コインは常に見える位置に出す（挑戦中のみ）
-  if (run) header.appendChild(coinChip(run.coins));
+  // ライフと所持コインは常に見える位置に出す（挑戦中のみ）
+  if (run) {
+    header.appendChild(lifeEl(run.life));
+    header.appendChild(coinChip(run.coins));
+  }
   state.lastCoins = run ? run.coins : null;
   root.appendChild(header);
 

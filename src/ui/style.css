@@ -39,6 +39,8 @@
   --bar-h-fixed: 320px;
   /* 盤面が潰れないための最小の高さ */
   --board-min: 140px;
+  /* ライフ（ハート）の色。暗い背景でも見えるよう鮮やかな赤にする */
+  --life: #ff4757;
 }
 
 * {
@@ -64,12 +66,12 @@ body {
   margin: 0 auto;
   height: 100vh;
   background: var(--bg);
-  padding: 6px;
+  padding: 4px;
   overflow-x: hidden;
   overflow-y: hidden;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .app-head {
@@ -79,20 +81,27 @@ body {
   flex: 0 0 auto;
 }
 
-/* 盤面は残りの高さいっぱいを使う（潰れないよう最低高さを確保） */
+/*
+ * 盤面の入れ物は「盤面そのものの高さ」だけを取る（伸び縮みしない）。
+ * 余った高さは下部バーが吸うので、盤面の上下に帯が出ない。
+ */
 .board-area {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: var(--board-min);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   overflow: hidden;
 }
 
 h1 {
-  font-size: var(--font-heading);
+  font-size: var(--font-body);
+  line-height: 26px;
   margin: 0;
-  flex: 1;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -302,9 +311,8 @@ select {
 
 .board {
   width: 100%;
-  height: 100%;
-  /* 盤面は少しだけ小さくして、上下の余白を下部バーに回す */
-  max-height: 96%;
+  height: auto;
+  aspect-ratio: 360 / 359;
   display: block;
   background: #0e0f16;
   border: 1px solid var(--line);
@@ -392,8 +400,7 @@ select {
 .bottom-bar {
   flex: 0 0 auto;
   /* B6: どのタブでも外枠の高さは変わらない */
-  height: var(--bar-h-fixed);
-  max-height: var(--bar-h-fixed);
+  flex: 1 1 var(--bar-h-fixed);
   min-height: var(--bar-h-fixed);
   background: var(--panel);
   border: 1px solid var(--line);
@@ -810,12 +817,6 @@ select {
 
 /* --- ラン進行 --- */
 
-.run-status {
-  font-size: var(--font-body);
-  font-weight: 700;
-  padding: 2px 0 4px;
-}
-
 .run-map {
   display: flex;
   gap: 6px;
@@ -1163,4 +1164,55 @@ select {
   opacity: 0.45;
   filter: grayscale(0.8);
   cursor: not-allowed;
+}
+
+/* --- ライフ（ハート） --- */
+
+.life-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--life);
+  line-height: 1.2;
+}
+
+.heart {
+  font-size: var(--font-body);
+}
+
+/* 残っているライフ：鮮やかな赤の塗り */
+.heart.on {
+  color: var(--life);
+  text-shadow: 0 0 4px rgba(255, 71, 87, 0.55);
+}
+
+/* 失ったライフ：灰色の輪郭だけ */
+.heart.off {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.life-num {
+  font-size: var(--font-sub);
+  font-weight: 700;
+  color: var(--life);
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+
+.run-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-body);
+  font-weight: 700;
+  padding: 2px 0 4px;
+}
+
+.run-status .coin-text {
+  color: var(--accent);
+  font-weight: 700;
 }

@@ -11,7 +11,7 @@
         "wood": 0,
         "lightning": 0
       },
-      "winRate": 83.3,
+      "winRate": 72.7,
       "perEncounter": [
         {
           "encounter": "E0",
@@ -42,6 +42,36 @@
           "dps": 182.1,
           "win": true,
           "duration": 22.1
+        },
+        {
+          "encounter": "C1B",
+          "dps": 185,
+          "win": true,
+          "duration": 18.2
+        },
+        {
+          "encounter": "C2A",
+          "dps": 124.1,
+          "win": true,
+          "duration": 25.7
+        },
+        {
+          "encounter": "C2B",
+          "dps": 146.3,
+          "win": false,
+          "duration": 21.8
+        },
+        {
+          "encounter": "C3A",
+          "dps": 182.1,
+          "win": true,
+          "duration": 22.1
+        },
+        {
+          "encounter": "C3B",
+          "dps": 135.7,
+          "win": false,
+          "duration": 15.5
         },
         {
           "encounter": "B1",
@@ -92,6 +122,36 @@
           "dps": 942.8,
           "win": true,
           "duration": 4.6
+        },
+        {
+          "encounter": "C1B",
+          "dps": 1042.2,
+          "win": true,
+          "duration": 3.3
+        },
+        {
+          "encounter": "C2A",
+          "dps": 919.6,
+          "win": true,
+          "duration": 4.5
+        },
+        {
+          "encounter": "C2B",
+          "dps": 931.7,
+          "win": true,
+          "duration": 5.1
+        },
+        {
+          "encounter": "C3A",
+          "dps": 942.8,
+          "win": true,
+          "duration": 4.6
+        },
+        {
+          "encounter": "C3B",
+          "dps": 832.9,
+          "win": true,
+          "duration": 6.1
         },
         {
           "encounter": "B1",

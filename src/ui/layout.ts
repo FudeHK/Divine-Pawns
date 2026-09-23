@@ -12,11 +12,11 @@ export const LAYOUT = {
   /** 要素間の標準の隙間 */
   gap: 8,
   /** #app の内側の余白（上下それぞれ） */
-  appPadding: 6,
+  appPadding: 4,
   /** #app の子要素どうしの隙間 */
-  appGap: 4,
+  appGap: 2,
   /** 画面上部の見出し行 */
-  headerHeight: 30,
+  headerHeight: 26,
   /**
    * 下部バーの高さ（px・固定）。
    * 「編成」タブ（いちばん縦を要する）の実コンテンツ高さ＋余白から決めている。
@@ -81,7 +81,20 @@ export function tabBodyHeight(viewportHeight?: number): number {
   );
 }
 
-/** 盤面に残る高さ */
+/** 盤面（六角グリッド）の縦横比。src/ui/main.ts の BOARD_W / BOARD_H と同じ */
+const SQ3 = Math.sqrt(3);
+const BOARD_R = (360 - 4) / (SQ3 * 5.5);
+export const BOARD_ASPECT = 360 / (1.5 * BOARD_R * 5 + 2 * BOARD_R + 4);
+
+/** #app の最大幅（style.css の #app max-width と同じ） */
+export const APP_MAX_WIDTH = 430;
+
+/** 盤面の入れ物に使える横幅 */
+export function boardAreaWidth(viewportWidth: number): number {
+  return Math.min(APP_MAX_WIDTH, viewportWidth) - LAYOUT.appPadding * 2;
+}
+
+/** 盤面の入れ物に使える高さ（下部バーが最小のときの上限） */
 export function boardHeight(viewportHeight: number): number {
   return (
     viewportHeight -
@@ -92,5 +105,44 @@ export function boardHeight(viewportHeight: number): number {
   );
 }
 
+/**
+ * 実際に描かれる盤面の高さ。
+ * 盤面は縦横比を保つので、横幅で決まる高さと、使える高さの小さい方になる。
+ */
+export function boardRenderedHeight(viewportWidth: number, viewportHeight: number): number {
+  const byWidth = boardAreaWidth(viewportWidth) / BOARD_ASPECT;
+  return Math.min(byWidth, boardHeight(viewportHeight));
+}
+
+/**
+ * 盤面の上下に残る余白。
+ * 盤面の入れ物は伸び縮みせず（flex: 0 0 auto）、余りは下部バーが吸うので 0 になる。
+ */
+export function boardVerticalSlack(viewportWidth: number, viewportHeight: number): number {
+  const area = Math.max(
+    LAYOUT.boardMinHeight,
+    boardRenderedHeight(viewportWidth, viewportHeight),
+  );
+  return area - boardRenderedHeight(viewportWidth, viewportHeight);
+}
+
+/** 実際の下部バーの高さ（余った高さはバーが吸う。最小は LAYOUT.barHeight） */
+export function barHeightAt(viewportWidth: number, viewportHeight: number): number {
+  const rest =
+    viewportHeight -
+    LAYOUT.appPadding * 2 -
+    LAYOUT.headerHeight -
+    LAYOUT.appGap * 2 -
+    boardRenderedHeight(viewportWidth, viewportHeight);
+  return Math.max(LAYOUT.barHeight, rest);
+}
+
 /** テストで確かめる想定の画面高さ */
 export const TEST_VIEWPORT_HEIGHTS = [667, 736, 812, 932] as const;
+
+/** 実機の主要サイズ（幅 × 高さ） */
+export const TEST_VIEWPORTS = [
+  [375, 667],
+  [390, 844],
+  [428, 926],
+] as const;

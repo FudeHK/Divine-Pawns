@@ -10,9 +10,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LAYOUT,
+  TEST_VIEWPORTS,
   TEST_VIEWPORT_HEIGHTS,
   barHeight,
+  barHeightAt,
+  boardAreaWidth,
   boardHeight,
+  boardRenderedHeight,
+  boardVerticalSlack,
   tabBodyHeight,
   teamCardHeight,
   teamTabContentHeight,
@@ -134,7 +139,7 @@ describe('盤面が潰れない', () => {
 });
 
 describe('B6 下部バーの高さは固定', () => {
-  it('CSS で height / min-height / max-height をすべて同じ値に固定している', () => {
+  it('CSS で下部バーの最小高さを固定し、余った高さはバーが吸う', () => {
     const decls = new Map(
       ruleBody('.bottom-bar')
         .split(';')
@@ -142,14 +147,67 @@ describe('B6 下部バーの高さは固定', () => {
         .filter((kv) => kv.length >= 2)
         .map((kv) => [kv[0]!.trim(), kv.slice(1).join(':').trim()]),
     );
-    const want = 'var(--bar-h-fixed)';
-    for (const prop of ['height', 'min-height', 'max-height']) {
-      expect(decls.get(prop), prop).toBe(want);
-    }
+    expect(decls.get('min-height')).toBe('var(--bar-h-fixed)');
+    expect(decls.get('flex')).toBe('1 1 var(--bar-h-fixed)');
+    // どのタブでも中身の量では高さが変わらない（画面サイズだけで決まる）
+    expect(decls.get('height')).toBeUndefined();
   });
 
   it('中身が多いタブでも内部スクロールで吸収する（外枠は変えない）', () => {
     expect(ruleBody('.tab-body')).toContain('overflow-y: auto');
     expect(ruleBody('.tab-body')).toContain('flex: 1 1 auto');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.7: 盤面の上下に余白を残さない
+// ---------------------------------------------------------------------------
+
+describe('盤面の上下に余白が出ない', () => {
+  it('盤面の入れ物は伸びない（余った高さは下部バーが吸う）', () => {
+    const decls = new Map(
+      ruleBody('.board-area')
+        .split(';')
+        .map((d) => d.split(':'))
+        .filter((kv) => kv.length >= 2)
+        .map((kv) => [kv[0]!.trim(), kv.slice(1).join(':').trim()]),
+    );
+    expect(decls.get('flex')).toBe('0 1 auto');
+    expect(decls.get('align-items')).toBe('stretch');
+    // 盤面自体は縦横比で高さが決まる（レターボックスの余白が出ない）
+    expect(ruleBody('.board')).toContain('aspect-ratio');
+    expect(ruleBody('.board')).not.toContain('max-height');
+  });
+
+  it.each([...TEST_VIEWPORTS])('%ix%i で盤面の上下余白が 0', (vw, vh) => {
+    expect(boardVerticalSlack(vw, vh)).toBe(0);
+  });
+
+  it.each([...TEST_VIEWPORTS])('%ix%i で画面ぴったりに収まる', (vw, vh) => {
+    const total =
+      LAYOUT.appPadding * 2 +
+      LAYOUT.headerHeight +
+      LAYOUT.appGap * 2 +
+      boardRenderedHeight(vw, vh) +
+      barHeightAt(vw, vh);
+    expect(Math.round(total)).toBe(vh);
+  });
+
+  it.each([...TEST_VIEWPORTS])('%ix%i で盤面が潰れない', (vw, vh) => {
+    expect(boardRenderedHeight(vw, vh)).toBeGreaterThanOrEqual(LAYOUT.boardMinHeight);
+    // 盤面の1マスがつぶれない目安（横幅の 1/6 以上）
+    expect(boardAreaWidth(vw) / 6).toBeGreaterThan(40);
+  });
+
+  it.each([...TEST_VIEWPORTS])('%ix%i で下部バーは最小高さ以上', (vw, vh) => {
+    expect(barHeightAt(vw, vh)).toBeGreaterThanOrEqual(LAYOUT.barHeight);
+    expect(tabBodyHeight(vh)).toBeGreaterThanOrEqual(teamTabContentHeight());
+  });
+
+  it('フェーズ2.6（padding 6 / gap 4 / ヘッダー30）より縦の余白が減っている', () => {
+    const before = 6 * 2 + 4 * 2 + 30;
+    const after = LAYOUT.appPadding * 2 + LAYOUT.appGap * 2 + LAYOUT.headerHeight;
+    expect(after).toBeLessThan(before);
+    expect(before - after).toBeGreaterThanOrEqual(12);
   });
 });

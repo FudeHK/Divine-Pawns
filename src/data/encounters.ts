@@ -51,6 +51,62 @@ const raw: EncounterDef[] = [
       { enemyId: 'en_sparker', pos: { x: 2, y: 0 }, scale: 0.9 },
     ],
   },
+  // --- 章ごとの通常戦。章が進むほど「顔ぶれ」も変わる（数値は chapterScale で別に伸ばす） ---
+  {
+    // 1章2戦目。前衛2＋射手の基本形
+    id: 'C1B',
+    name: '1章 通常戦（兵士2＋射手）',
+    units: [
+      { enemyId: 'en_soldier', pos: { x: 2, y: 2 }, scale: 1.12 },
+      { enemyId: 'en_soldier', pos: { x: 0, y: 2 }, scale: 1.12 },
+      { enemyId: 'en_archer', pos: { x: 2, y: 0 }, scale: 1.12 },
+    ],
+  },
+  {
+    // 2章1戦目。攻撃的な顔ぶれ（暗殺型が後衛を狙ってくる）
+    id: 'C2A',
+    name: '2章 通常戦（暗殺型2＋射手）',
+    units: [
+      { enemyId: 'en_soldier', pos: { x: 1, y: 2 }, scale: 1.0 },
+      { enemyId: 'en_stalker', pos: { x: 3, y: 2 }, scale: 1.0 },
+      { enemyId: 'en_stalker', pos: { x: 2, y: 1 }, scale: 0.9 },
+      { enemyId: 'en_archer', pos: { x: 1, y: 0 }, scale: 0.9 },
+    ],
+  },
+  {
+    // 2章2戦目。硬い前衛＋火力。長期戦になりやすい
+    id: 'C2B',
+    name: '2章 通常戦（重装＋射手2）',
+    units: [
+      { enemyId: 'en_bulwark', pos: { x: 2, y: 2 }, scale: 0.88 },
+      { enemyId: 'en_soldier', pos: { x: 0, y: 2 }, scale: 0.95 },
+      { enemyId: 'en_archer', pos: { x: 1, y: 0 }, scale: 0.9 },
+      { enemyId: 'en_archer', pos: { x: 3, y: 0 }, scale: 0.9 },
+    ],
+  },
+  {
+    // 3章1戦目。属性デバフ持ちが揃う
+    id: 'C3A',
+    name: '3章 通常戦（デバフ隊）',
+    units: [
+      { enemyId: 'en_bulwark', pos: { x: 2, y: 2 }, scale: 0.86 },
+      { enemyId: 'en_venomancer', pos: { x: 1, y: 1 }, scale: 0.9 },
+      { enemyId: 'en_shaman', pos: { x: 2, y: 1 }, scale: 0.9 },
+      { enemyId: 'en_sparker', pos: { x: 2, y: 0 }, scale: 0.9 },
+    ],
+  },
+  {
+    // 3章2戦目。デバフ＋暗殺型の混成（最終章らしい多面攻め）
+    id: 'C3B',
+    name: '3章 通常戦（混成部隊）',
+    units: [
+      { enemyId: 'en_bulwark', pos: { x: 2, y: 2 }, scale: 0.84 },
+      { enemyId: 'en_stalker', pos: { x: 0, y: 2 }, scale: 0.88 },
+      { enemyId: 'en_venomancer', pos: { x: 1, y: 1 }, scale: 0.86 },
+      { enemyId: 'en_sparker', pos: { x: 1, y: 0 }, scale: 0.86 },
+      { enemyId: 'en_shaman', pos: { x: 3, y: 0 }, scale: 0.86 },
+    ],
+  },
   {
     id: 'B1',
     name: 'ボス戦（取り巻き付き）',

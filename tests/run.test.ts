@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTERS, getSkill } from '../src/data/characters';
+import { getEncounter } from '../src/data/encounters';
 import { getEquipment } from '../src/data/equipment';
 import { EVENTS, RISKY_EVENTS, SAFE_EVENTS, getEvent } from '../src/data/events';
 import { DEFAULT_RUN_CONFIG, cloneRunConfig } from '../src/game/config';
@@ -35,6 +36,7 @@ import {
   rerollShop,
   resolveEventBattle,
   runLoadout,
+  rollShop,
 } from '../src/game/run';
 import { MemoryStorage, clearRun, hasSavedRun, loadRun, saveRun } from '../src/game/save';
 import type { RunState } from '../src/game/types';
@@ -991,5 +993,124 @@ describe('章ごとの難易度', () => {
     const raw = (cfg.chapterScale[1] ?? 1) * 1.0;
     expect(boss).toBeCloseTo(raw * (cfg.bossScale[1] ?? 1) * 0.9, 6);
     expect(cfg.bossScale[1]).toBeGreaterThan(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.7: 初期キャラのランダム化・章別の敵・★3時の代替報酬
+// ---------------------------------------------------------------------------
+
+describe('挑戦開始時の初期キャラ', () => {
+  it('シードごとに初期キャラが変わり、偏りなくばらける', () => {
+    const counts = new Map<string, number>();
+    const tries = 200;
+    for (let i = 0; i < tries; i++) {
+      const r = createRun(`start-${i}`, cfg);
+      expect(r.roster).toHaveLength(1);
+      const id = r.roster[0]!.charId;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    // 全キャラが初期キャラになりうる
+    expect(counts.size).toBe(CHARACTERS.length);
+    // どれかに寄りすぎていない（期待値 1/8 の半分〜2倍に収まる）
+    const expected = tries / CHARACTERS.length;
+    for (const [id, n] of counts) {
+      expect(n, id).toBeGreaterThan(expected * 0.5);
+      expect(n, id).toBeLessThan(expected * 2);
+    }
+  });
+
+  it('同じシードなら初期キャラも同じ（再現性）', () => {
+    for (let i = 0; i < 20; i++) {
+      const a = createRun(`same-${i}`, cfg);
+      const b = createRun(`same-${i}`, cfg);
+      expect(a.roster[0]!.charId).toBe(b.roster[0]!.charId);
+    }
+  });
+
+  it('初期キャラは前衛に配置されている', () => {
+    const r = createRun('place', cfg);
+    expect(r.roster[0]!.slot).toBe('frontline');
+    expect(r.roster[0]!.pos).not.toBeNull();
+  });
+});
+
+describe('章ごとの敵バリエーション', () => {
+  it('章が進むと通常戦の遭遇IDが変わる', () => {
+    const ids = (chapter: number): string[] =>
+      chapterNodes(chapter, cfg)
+        .filter((n) => n.kind === 'battle')
+        .map((n) => n.encounterId!);
+    const c1 = ids(1);
+    const c2 = ids(2);
+    const c3 = ids(3);
+    expect(c1).toEqual(['E1', 'C1B']);
+    expect(new Set([...c1, ...c2, ...c3]).size).toBe(6);
+    for (const id of [...c1, ...c2, ...c3]) expect(getEncounter(id)).toBeTruthy();
+  });
+
+  it('章が進むほど敵の数が増える（顔ぶれも変わる）', () => {
+    const size = (id: string): number => getEncounter(id).units.length;
+    expect(size('C1B')).toBeLessThan(size('C3B'));
+    const kinds = (id: string): Set<string> =>
+      new Set(getEncounter(id).units.map((u) => u.enemyId));
+    expect([...kinds('C3A')].some((k) => !kinds('C1B').has(k))).toBe(true);
+  });
+});
+
+describe('★3が揃った時のショップ', () => {
+  function maxAll(r: RunState): void {
+    for (const c of CHARACTERS) {
+      const owned = ownedChar(r, c.id);
+      if (owned) owned.star = 3;
+      else {
+        grantCharacter(r, c.id);
+        grantCharacter(r, c.id);
+        grantCharacter(r, c.id);
+      }
+    }
+    r.pendingSkills = [];
+  }
+
+  it('候補がなくてもショップの品数は減らず、装備に振り替わる', () => {
+    const r = run('all-star3');
+    maxAll(r);
+    expect(availableCharacters(r)).toHaveLength(0);
+
+    for (const boss of [false, true]) {
+      const shop = rollShop(r, boss, 0, cfg);
+      const kinds = shop.items.map((x) => x.item.kind);
+      expect(kinds.filter((k) => k === 'character')).toHaveLength(0);
+      // キャラ2枠ぶんが装備に振り替わる（ボスは枠が1つ多い）
+      const perKind = 2 + (boss ? cfg.bossExtraPerKind : 0);
+      expect(kinds.filter((k) => k === 'equipment')).toHaveLength(perKind * 2);
+      expect(kinds.filter((k) => k === 'blessing')).toHaveLength(perKind);
+      for (const slot of shop.items) expect(slot.item.price).toBeGreaterThan(0);
+    }
+  });
+
+  it('候補が1体だけなら、残り1枠が装備になる', () => {
+    const r = run('one-left');
+    maxAll(r);
+    const target = CHARACTERS[0]!;
+    ownedChar(r, target.id)!.star = 2;
+    expect(availableCharacters(r)).toHaveLength(1);
+
+    const shop = rollShop(r, false, 0, cfg);
+    const kinds = shop.items.map((x) => x.item.kind);
+    expect(kinds.filter((k) => k === 'character')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'equipment')).toHaveLength(3);
+  });
+
+  it('同じショップに同じキャラが2回並ばない', () => {
+    for (let i = 0; i < 40; i++) {
+      const r = run(`dup-${i}`);
+      const shop = rollShop(r, i % 2 === 0, 0, cfg);
+      const chars = shop.items
+        .map((x) => x.item)
+        .filter((it) => it.kind === 'character')
+        .map((it) => (it.kind === 'character' ? it.charId : ''));
+      expect(new Set(chars).size).toBe(chars.length);
+    }
   });
 });
