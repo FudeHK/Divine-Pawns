@@ -37,6 +37,8 @@ import {
   resolveEventBattle,
   runLoadout,
   rollShop,
+  closeRetryShop,
+  bossEncounterId,
 } from '../src/game/run';
 import { MemoryStorage, clearRun, hasSavedRun, loadRun, saveRun } from '../src/game/save';
 import type { RunState } from '../src/game/types';
@@ -1111,6 +1113,88 @@ describe('★3が揃った時のショップ', () => {
         .filter((it) => it.kind === 'character')
         .map((it) => (it.kind === 'character' ? it.charId : ''));
       expect(new Set(chars).size).toBe(chars.length);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.8: 敗北 → 特例ショップ → 再挑戦
+// ---------------------------------------------------------------------------
+
+describe('敗北後の特例ショップ', () => {
+  it('通常戦に負けると特例ショップが開き、閉じると同じ戦闘に戻る', () => {
+    const r = run('retry-shop');
+    const res = applyBattleResult(r, false, cfg);
+    expect(res.retry).toBe(true);
+    expect(r.life).toBe(2);
+    expect(r.coins).toBe(cfg.coinsLose);
+
+    // ノードは進まない。ショップだけが別枠で開く
+    expect(currentNode(r, cfg)!.kind).toBe('battle');
+    expect(r.shop).not.toBeNull();
+    expect(r.shop!.retry).toBe(true);
+    expect(r.shop!.items.length).toBe(6);
+
+    // 買い物もできる
+    r.coins = 99;
+    expect(buyShopItem(r, 0, cfg)).toBe(true);
+    expect(rerollShop(r, cfg)).toBe(true);
+    expect(r.shop!.retry).toBe(true);
+
+    // 閉じるとノードは同じまま、ショップだけ消える
+    expect(closeRetryShop(r)).toBe(true);
+    expect(r.shop).toBeNull();
+    expect(currentNode(r, cfg)!.kind).toBe('battle');
+  });
+
+  it('章ボスに負けても同じ流れ（特例ショップ → 章ボスに再挑戦）', () => {
+    const r = run('retry-boss');
+    advanceTo(r, 'boss');
+    const before = currentNode(r, cfg)!.encounterId;
+    applyBattleResult(r, false, cfg);
+    expect(r.shop!.retry).toBe(true);
+    closeRetryShop(r);
+    expect(currentNode(r, cfg)!.kind).toBe('boss');
+    expect(currentNode(r, cfg)!.encounterId).toBe(before);
+
+    // 勝てば先へ進み、特例ショップは残らない
+    applyBattleResult(r, true, cfg);
+    expect(r.shop!.retry).toBeFalsy();
+    expect(currentNode(r, cfg)!.kind).toBe('bossShop');
+  });
+
+  it('負け続けるとライフが尽き、ゲームオーバーでは特例ショップを出さない', () => {
+    const r = run('retry-over');
+    for (let i = 0; i < 2; i++) {
+      applyBattleResult(r, false, cfg);
+      closeRetryShop(r);
+    }
+    const res = applyBattleResult(r, false, cfg);
+    expect(res.gameOver).toBe(true);
+    expect(r.phase).toBe('gameover');
+    expect(r.shop).toBeNull();
+  });
+
+  it('特例ショップは通常ショップと同じ品揃え・価格ロジックを使う', () => {
+    const r = run('retry-same');
+    applyBattleResult(r, false, cfg);
+    const kinds = r.shop!.items.map((x) => x.item.kind);
+    expect(kinds.filter((k) => k === 'character').length + kinds.filter((k) => k === 'equipment').length).toBe(4);
+    expect(kinds.filter((k) => k === 'blessing')).toHaveLength(2);
+    expect(r.shop!.boss).toBe(false);
+    expect(r.shop!.rerollCost).toBe(cfg.price.reroll);
+  });
+});
+
+describe('章ごとの章ボス', () => {
+  it('章ごとに違うボスが出る', () => {
+    expect(bossEncounterId(1)).toBe('B1');
+    expect(bossEncounterId(2)).toBe('B2');
+    expect(bossEncounterId(3)).toBe('B3');
+    for (const ch of [1, 2, 3]) {
+      const boss = chapterNodes(ch, cfg).find((n) => n.kind === 'boss')!;
+      expect(boss.encounterId).toBe(bossEncounterId(ch));
+      expect(getEncounter(boss.encounterId!).units.length).toBeGreaterThan(1);
     }
   });
 });

@@ -27,6 +27,12 @@ export const LAYOUT = {
   barPadding: 8,
   /** 盤面が潰れないための最小の高さ */
   boardMinHeight: 140,
+  /**
+   * メイン画面（盤面・リザルト・ショップ・イベント共通）の固定高さ。
+   * いちばん狭い想定画面（375×667）で余白を詰めたときの盤面の高さを基準にする。
+   * screenMode が変わっても、画面サイズが変わっても、ここは動かさない。
+   */
+  mainHeight: 300,
 
   /** キャラカードの内側の余白（上下それぞれ） */
   cardPadding: 6,
@@ -106,34 +112,36 @@ export function boardHeight(viewportHeight: number): number {
 }
 
 /**
- * 実際に描かれる盤面の高さ。
- * 盤面は縦横比を保つので、横幅で決まる高さと、使える高さの小さい方になる。
+ * メイン画面の高さ。screenMode にも画面サイズにもよらず固定。
  */
-export function boardRenderedHeight(viewportWidth: number, viewportHeight: number): number {
+export function mainHeight(): number {
+  return LAYOUT.mainHeight;
+}
+
+/**
+ * 実際に描かれる盤面の高さ。メイン画面の固定高さに収まる大きさになる。
+ */
+export function boardRenderedHeight(viewportWidth: number, _viewportHeight = 0): number {
   const byWidth = boardAreaWidth(viewportWidth) / BOARD_ASPECT;
-  return Math.min(byWidth, boardHeight(viewportHeight));
+  return Math.min(byWidth, mainHeight());
 }
 
 /**
  * 盤面の上下に残る余白。
  * 盤面の入れ物は伸び縮みせず（flex: 0 0 auto）、余りは下部バーが吸うので 0 になる。
  */
-export function boardVerticalSlack(viewportWidth: number, viewportHeight: number): number {
-  const area = Math.max(
-    LAYOUT.boardMinHeight,
-    boardRenderedHeight(viewportWidth, viewportHeight),
-  );
-  return area - boardRenderedHeight(viewportWidth, viewportHeight);
+export function boardVerticalSlack(viewportWidth: number, _viewportHeight = 0): number {
+  return mainHeight() - boardRenderedHeight(viewportWidth);
 }
 
 /** 実際の下部バーの高さ（余った高さはバーが吸う。最小は LAYOUT.barHeight） */
-export function barHeightAt(viewportWidth: number, viewportHeight: number): number {
+export function barHeightAt(_viewportWidth: number, viewportHeight: number): number {
   const rest =
     viewportHeight -
     LAYOUT.appPadding * 2 -
     LAYOUT.headerHeight -
     LAYOUT.appGap * 2 -
-    boardRenderedHeight(viewportWidth, viewportHeight);
+    mainHeight();
   return Math.max(LAYOUT.barHeight, rest);
 }
 

@@ -11,7 +11,7 @@
         "wood": 0,
         "lightning": 0
       },
-      "winRate": 72.7,
+      "winRate": 61.5,
       "perEncounter": [
         {
           "encounter": "E0",
@@ -78,6 +78,18 @@
           "dps": 158.7,
           "win": true,
           "duration": 28.5
+        },
+        {
+          "encounter": "B2",
+          "dps": 115.9,
+          "win": false,
+          "duration": 40.6
+        },
+        {
+          "encounter": "B3",
+          "dps": 155,
+          "win": false,
+          "duration": 23.5
         }
       ]
     },
@@ -158,6 +170,18 @@
           "dps": 794.2,
           "win": true,
           "duration": 6.4
+        },
+        {
+          "encounter": "B2",
+          "dps": 742.2,
+          "win": true,
+          "duration": 7.4
+        },
+        {
+          "encounter": "B3",
+          "dps": 871.4,
+          "win": true,
+          "duration": 6.1
         }
       ]
     }

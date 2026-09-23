@@ -73,6 +73,12 @@ export interface ShopOffer {
   rerollCost: number;
   /** ボスショップか */
   boss: boolean;
+  /**
+   * 敗北のあとに1回だけ挟まる「特例ショップ」か。
+   * 通常のノード進行（戦闘→ショップ→イベント）とは別枠で、
+   * 使い終わると同じ戦闘へ再挑戦する。
+   */
+  retry?: boolean;
 }
 
 /** イベントの結果 */

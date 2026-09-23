@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23T21:21:26.667Z",
+  "generatedAt": "2026-09-23T21:43:39.342Z",
   "determinism": {
     "total": 1000,
     "matched": 1000,
@@ -167,10 +167,10 @@
   },
   "balance": {
     "loadouts": 1000,
-    "battles": 11000,
-    "avgDuration": 13.26,
+    "battles": 13000,
+    "avgDuration": 14.88,
     "timeoutRate": 0,
-    "overallWinRate": 93.65,
+    "overallWinRate": 92.32,
     "perEncounter": [
       {
         "encounter": "E0",
@@ -259,6 +259,22 @@
         "avgDuration": 19.91,
         "timeoutRate": 0,
         "avgAllyDps": 291.7
+      },
+      {
+        "encounter": "B2",
+        "battles": 1000,
+        "winRate": 88.2,
+        "avgDuration": 26.62,
+        "timeoutRate": 0,
+        "avgAllyDps": 242.2
+      },
+      {
+        "encounter": "B3",
+        "battles": 1000,
+        "winRate": 81.8,
+        "avgDuration": 20.91,
+        "timeoutRate": 0,
+        "avgAllyDps": 284.9
       }
     ],
     "buildScenarios": [
@@ -266,45 +282,45 @@
         "style": "elite",
         "label": "少数精鋭（前衛2・サポート1に集中投資）",
         "runs": 200,
-        "clears": 23,
-        "clearRate": 11.5,
+        "clears": 17,
+        "clearRate": 8.5,
         "avgReachedChapter": 1.62,
-        "avgBattleWinRate": 45.5,
-        "avgRoster": 1.54,
-        "avgMaxStar": 1.72
+        "avgBattleWinRate": 42.6,
+        "avgRoster": 1.65,
+        "avgMaxStar": 1.97
       },
       {
         "style": "wide",
         "label": "多キャラ（枠いっぱいに広く編成）",
         "runs": 200,
-        "clears": 22,
-        "clearRate": 11,
-        "avgReachedChapter": 2.03,
-        "avgBattleWinRate": 53.9,
-        "avgRoster": 4.86,
-        "avgMaxStar": 2
+        "clears": 17,
+        "clearRate": 8.5,
+        "avgReachedChapter": 2.06,
+        "avgBattleWinRate": 53.2,
+        "avgRoster": 5.7,
+        "avgMaxStar": 2.51
       }
     ],
     "dpsByElement": [
       {
         "element": "fire",
-        "avgDps": 262.5,
-        "share": 37.1
+        "avgDps": 247.4,
+        "share": 37.5
       },
       {
         "element": "ice",
-        "avgDps": 101.5,
-        "share": 14.2
+        "avgDps": 93.3,
+        "share": 14
       },
       {
         "element": "wood",
-        "avgDps": 104.8,
-        "share": 14.4
+        "avgDps": 100.2,
+        "share": 14.9
       },
       {
         "element": "lightning",
-        "avgDps": 238.6,
-        "share": 34.3
+        "avgDps": 218.7,
+        "share": 33.6
       }
     ]
   },
@@ -321,7 +337,7 @@
           "wood": 0,
           "lightning": 0
         },
-        "winRate": 72.7,
+        "winRate": 61.5,
         "perEncounter": [
           {
             "encounter": "E0",
@@ -388,6 +404,18 @@
             "dps": 158.7,
             "win": true,
             "duration": 28.5
+          },
+          {
+            "encounter": "B2",
+            "dps": 115.9,
+            "win": false,
+            "duration": 40.6
+          },
+          {
+            "encounter": "B3",
+            "dps": 155,
+            "win": false,
+            "duration": 23.5
           }
         ]
       },
@@ -468,6 +496,18 @@
             "dps": 794.2,
             "win": true,
             "duration": 6.4
+          },
+          {
+            "encounter": "B2",
+            "dps": 742.2,
+            "win": true,
+            "duration": 7.4
+          },
+          {
+            "encounter": "B3",
+            "dps": 871.4,
+            "win": true,
+            "duration": 6.1
           }
         ]
       }
@@ -477,10 +517,10 @@
   },
   "perf": {
     "battles": 10000,
-    "seconds": 9.69,
-    "battlesPerSecond": 1032.2,
-    "avgTicksPerBattle": 83,
-    "avgDuration": 8.3,
+    "seconds": 10.21,
+    "battlesPerSecond": 979.7,
+    "avgTicksPerBattle": 92.1,
+    "avgDuration": 9.21,
     "logging": true
   },
   "pass": true

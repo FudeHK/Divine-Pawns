@@ -47,7 +47,14 @@ const CHAPTER_BATTLES: Record<number, string[]> = {
   2: ['C2A', 'C2B'],
   3: ['C3A', 'C3B'],
 };
+/** 章ごとの章ボス。章が進むほど脅威の質が変わる */
+const CHAPTER_BOSSES: Record<number, string> = { 1: 'B1', 2: 'B2', 3: 'B3' };
 const BOSS_ENCOUNTER = 'B1';
+
+/** その章の章ボスの遭遇ID */
+export function bossEncounterId(chapter: number): string {
+  return CHAPTER_BOSSES[chapter] ?? CHAPTER_BOSSES[3]!;
+}
 
 // ---------------------------------------------------------------------------
 // ノード列
@@ -66,7 +73,7 @@ export function chapterNodes(chapter: number, cfg: RunConfig = DEFAULT_RUN_CONFI
     nodes.push({ kind: 'shop' });
     nodes.push({ kind: 'event' });
   }
-  nodes.push({ kind: 'boss', encounterId: BOSS_ENCOUNTER });
+  nodes.push({ kind: 'boss', encounterId: bossEncounterId(chapter) });
   if (chapter < cfg.chapters) nodes.push({ kind: 'bossShop' });
   return nodes;
 }
@@ -216,6 +223,7 @@ export function applyBattleResult(
     const gain = isBoss ? cfg.coinsBossWin : cfg.coinsWin;
     run.coins += gain;
     run.bossRetries = 0;
+    run.shop = null;
     advanceNode(run, cfg);
     return { retry: false, gameOver: false, coinsGained: gain, lifeLost: 0 };
   }
@@ -229,8 +237,11 @@ export function applyBattleResult(
     run.eventId = null;
     return { retry: false, gameOver: true, coinsGained: cfg.coinsLose, lifeLost: 1 };
   }
-  // 章ボスでも通常戦でも、ノードは進めずに同じ相手へ再挑戦する
+  // 章ボスでも通常戦でも、ノードは進めない。
+  // 立て直しのために「特例ショップ」を1回だけ挟んでから、同じ相手へ再挑戦する
   run.bossRetries += 1;
+  run.shop = rollShop(run, false, 0, cfg);
+  run.shop.retry = true;
   return { retry: true, gameOver: false, coinsGained: cfg.coinsLose, lifeLost: 1 };
 }
 
@@ -332,12 +343,24 @@ export function rollShop(
   };
 }
 
+/**
+ * 敗北後の特例ショップを閉じて、同じ戦闘へ再挑戦できる状態に戻す。
+ * ノードは進めない（通常のショップノードとは別物）。
+ */
+export function closeRetryShop(run: RunState): boolean {
+  if (!run.shop?.retry) return false;
+  run.shop = null;
+  return true;
+}
+
 export function rerollShop(run: RunState, cfg: RunConfig = DEFAULT_RUN_CONFIG): boolean {
   const shop = run.shop;
   if (!shop) return false;
   if (run.coins < shop.rerollCost) return false;
   run.coins -= shop.rerollCost;
   run.shop = rollShop(run, shop.boss, shop.rerolls + 1, cfg);
+  // 特例ショップ（敗北後）はリロールしても特例のまま
+  if (shop.retry) run.shop.retry = true;
   return true;
 }
 

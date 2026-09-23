@@ -28,8 +28,8 @@ describe('データ定義の検証', () => {
 
   it('敵とボスが zod を通る', () => {
     expect(() => validateAll(zEnemyDef, [...ENEMIES], 'ENEMIES')).not.toThrow();
-    // 通常敵8種＋ボス1体＋計測用の的
-    expect(ENEMIES.filter((e) => e.isBoss)).toHaveLength(1);
+    // 通常敵8種＋章ボス3体＋計測用の的
+    expect(ENEMIES.filter((e) => e.isBoss)).toHaveLength(3);
     expect(ENEMIES.length).toBeGreaterThanOrEqual(10);
   });
 
@@ -88,7 +88,21 @@ describe('データ定義の検証', () => {
 
   it('遭遇 E0・E1〜E4・章別（C1B/C2A/C2B/C3A/C3B）・B1 がそろっている', () => {
     const ids = ENCOUNTERS.map((e) => e.id);
-    expect(ids).toEqual(['E0', 'E1', 'E2', 'E3', 'E4', 'C1B', 'C2A', 'C2B', 'C3A', 'C3B', 'B1']);
+    expect(ids).toEqual([
+      'E0',
+      'E1',
+      'E2',
+      'E3',
+      'E4',
+      'C1B',
+      'C2A',
+      'C2B',
+      'C3A',
+      'C3B',
+      'B1',
+      'B2',
+      'B3',
+    ]);
     expect(PLACEMENT_ENCOUNTER_IDS).toEqual(['E1', 'E2', 'E3', 'E4', 'B1']);
     // E0 は弱い敵1体
     expect(ENCOUNTERS[0]!.units).toHaveLength(1);

@@ -12,6 +12,9 @@ import { BLESSINGS, getBlessing } from '../src/data/blessings';
 import { CHARACTERS } from '../src/data/characters';
 import { getEncounter } from '../src/data/encounters';
 import { getEnemy } from '../src/data/enemies';
+import { applyBattleResult, chapterNodes, createRun, prepareNode } from '../src/game/run';
+import { saveRun } from '../src/game/save';
+import type { RunState } from '../src/game/types';
 
 type TabId = 'team' | 'inventory' | 'run' | 'control';
 
@@ -919,5 +922,102 @@ describe('コインの表記', () => {
       expect(b.classList.contains('cant-afford')).toBe(coins < price);
     }
     expect(checked).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.8: 敗北 → 特例ショップ → 再挑戦（画面の流れ）
+// ---------------------------------------------------------------------------
+
+describe('敗北したときの画面の流れ', () => {
+  /** 指定の状態の挑戦をセーブしてから、続きから再開する */
+  async function resumeWith(make: (r: RunState) => void): Promise<void> {
+    const r = createRun('ui-lose');
+    make(r);
+    saveRun(r);
+    await boot();
+    enterChallenge();
+    findButton('続きから')!.click();
+  }
+
+  it('通常戦の敗北後は「立て直しのショップ」→「再挑戦」→ 戦闘準備 と進む', async () => {
+    await resumeWith((r) => {
+      applyBattleResult(r, false);
+    });
+
+    // 特例ショップから始まる（ノードは進んでいない）
+    expect(screen()).toBe('shop');
+    expect(mainArea().querySelector('.screen-title')!.textContent).toBe('立て直しのショップ');
+    expect(mainArea().textContent).toContain('同じ戦闘に再挑戦');
+    expect(mainArea().querySelectorAll('.shop-row').length).toBe(6);
+
+    findButton('戦闘へ戻る')!.click();
+    expect(screen()).toBe('result');
+    expect(findButton('再挑戦')).toBeTruthy();
+    findButton('再挑戦')!.click();
+
+    expect(screen()).toBe('prep');
+    expect(findButton('▶ この戦闘に挑む')).toBeTruthy();
+    openTab('run');
+    expect(tabBody().textContent).toContain('再挑戦');
+    expect(tabBody().textContent).toContain('いまのノード: 戦闘');
+  });
+
+  it('章ボスの敗北でも同じ流れ（特例ショップ → 章ボスに再挑戦）', async () => {
+    await resumeWith((r) => {
+      // 章ボスのノードへ移す
+      r.nodeIndex = chapterNodes(r.chapter).findIndex((n) => n.kind === 'boss');
+      prepareNode(r);
+      applyBattleResult(r, false);
+    });
+
+    expect(screen()).toBe('shop');
+    expect(mainArea().querySelector('.screen-title')!.textContent).toBe('立て直しのショップ');
+    findButton('戦闘へ戻る')!.click();
+    findButton('再挑戦')!.click();
+    expect(screen()).toBe('prep');
+    openTab('run');
+    expect(tabBody().textContent).toContain('いまのノード: 章ボス');
+  });
+
+  it('ライフの減りがハートで分かる', async () => {
+    await resumeWith((r) => {
+      applyBattleResult(r, false);
+    });
+    const hearts = [...app().querySelectorAll('.app-head .heart')];
+    expect(hearts).toHaveLength(3);
+    expect(hearts.filter((n) => n.classList.contains('on'))).toHaveLength(2);
+    expect(hearts.filter((n) => n.classList.contains('off'))).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.8: メイン画面のサイズは screenMode で変わらない
+// ---------------------------------------------------------------------------
+
+describe('メイン画面のサイズ', () => {
+  it('どの画面でも枠は同じ（高さはCSSの --main-h だけで決まる）', async () => {
+    await boot();
+    enterChallenge();
+    const seen: string[] = [];
+    const snap = (): void => {
+      seen.push(screen());
+      const area = mainArea();
+      expect(area.classList.contains('board-area')).toBe(true);
+      // インラインで高さを付けない＝ screenMode で大きさが変わらない
+      expect(area.style.height).toBe('');
+      expect(area.style.minHeight).toBe('');
+      expect(area.style.maxHeight).toBe('');
+    };
+    snap(); // prep
+    findButton('▶ この戦闘に挑む')!.click();
+    snap(); // battle
+    openTab('control');
+    findButton('⏭ スキップ')!.click();
+    findButton('結果へ')!.click();
+    snap(); // result
+    findButton('次へ')!.click();
+    snap(); // shop
+    expect(seen).toEqual(['prep', 'battle', 'result', 'shop']);
   });
 });

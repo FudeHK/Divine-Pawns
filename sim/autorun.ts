@@ -7,6 +7,7 @@
 import { DEFAULT_RUN_CONFIG, type RunConfig } from '../src/game/config';
 import {
   advanceNode,
+  closeRetryShop,
   applyBattleResult,
   buyShopItem,
   chooseEvent,
@@ -163,6 +164,14 @@ export function autoRun(
     reached = Math.max(reached, run.chapter);
     const node = currentNode(run, cfg);
     if (!node) break;
+
+    if (run.shop?.retry) {
+      // 敗北後の特例ショップ（立て直し）
+      shop(run, style, cfg);
+      drainSkillChoices(run);
+      closeRetryShop(run);
+      continue;
+    }
 
     if (node.kind === 'battle' || node.kind === 'boss') {
       arrange(run, style);

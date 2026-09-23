@@ -109,12 +109,32 @@ const raw: EncounterDef[] = [
   },
   {
     id: 'B1',
-    name: 'ボス戦（取り巻き付き）',
+    name: '1章ボス（灰塵の巨像）',
     units: [
       { enemyId: 'boss_colossus', pos: { x: 2, y: 2 }, scale: 0.9 },
       { enemyId: 'en_soldier', pos: { x: 0, y: 2 }, scale: 0.5 },
       { enemyId: 'en_soldier', pos: { x: 4, y: 2 }, scale: 0.5 },
       { enemyId: 'en_shaman', pos: { x: 2, y: 0 }, scale: 0.5 },
+    ],
+  },
+  {
+    id: 'B2',
+    name: '2章ボス（氷霧の女王）',
+    units: [
+      { enemyId: 'boss_rime', pos: { x: 2, y: 2 }, scale: 0.9 },
+      { enemyId: 'en_bulwark', pos: { x: 1, y: 2 }, scale: 0.5 },
+      { enemyId: 'en_bulwark', pos: { x: 3, y: 2 }, scale: 0.5 },
+      { enemyId: 'en_archer', pos: { x: 2, y: 0 }, scale: 0.5 },
+    ],
+  },
+  {
+    id: 'B3',
+    name: '3章ボス（蝕の王）',
+    units: [
+      { enemyId: 'boss_eclipse', pos: { x: 2, y: 2 }, scale: 0.9 },
+      { enemyId: 'en_stalker', pos: { x: 0, y: 2 }, scale: 0.5 },
+      { enemyId: 'en_venomancer', pos: { x: 1, y: 1 }, scale: 0.5 },
+      { enemyId: 'en_sparker', pos: { x: 3, y: 0 }, scale: 0.5 },
     ],
   },
 ];

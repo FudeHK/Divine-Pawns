@@ -39,6 +39,8 @@
   --bar-h-fixed: 320px;
   /* 盤面が潰れないための最小の高さ */
   --board-min: 140px;
+  /* メイン画面の固定高さ（src/ui/layout.ts の mainHeight と同じ値にする） */
+  --main-h: 300px;
   /* ライフ（ハート）の色。暗い背景でも見えるよう鮮やかな赤にする */
   --life: #ff4757;
 }
@@ -82,12 +84,14 @@ body {
 }
 
 /*
- * 盤面の入れ物は「盤面そのものの高さ」だけを取る（伸び縮みしない）。
- * 余った高さは下部バーが吸うので、盤面の上下に帯が出ない。
+ * メイン画面は常に同じ大きさ（screenMode が変わってもガタつかない）。
+ * 盤面はこの中に縦横比を保って収まり、それ以外の画面は中身を内部スクロールで吸収する。
  */
 .board-area {
-  flex: 0 1 auto;
-  min-height: var(--board-min);
+  flex: 0 0 var(--main-h);
+  height: var(--main-h);
+  min-height: var(--main-h);
+  max-height: var(--main-h);
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -310,8 +314,9 @@ select {
 /* --- 盤面 --- */
 
 .board {
-  width: 100%;
-  height: auto;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
   aspect-ratio: 360 / 359;
   display: block;
   background: #0e0f16;
@@ -899,11 +904,13 @@ select {
 
 /* --- メイン画面に出す画面（リザルト・ショップ・イベント・進行演出） --- */
 
+.board-area[data-screen='title'],
 .board-area[data-screen='result'],
 .board-area[data-screen='shop'],
 .board-area[data-screen='event'],
 .board-area[data-screen='nodeTransition'] {
-  align-items: stretch;
+  align-items: flex-start;
+  /* 固定サイズの枠に収まらない中身は、枠の中でスクロールさせる */
   overflow-y: auto;
 }
 

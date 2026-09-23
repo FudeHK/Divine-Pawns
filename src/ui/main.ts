@@ -40,6 +40,7 @@ import {
   advanceNode,
   applyBattleResult,
   buyShopItem,
+  closeRetryShop,
   equipItem,
   inventorySummary,
   stockOf,
@@ -831,6 +832,8 @@ function setScreen(mode: ScreenMode): void {
 function screenForNode(): ScreenMode {
   const run = state.run;
   if (!run || run.phase !== 'node') return 'prep';
+  // 敗北のあとの特例ショップは、ノードの種類にかかわらず先に出す
+  if (run.shop?.retry) return 'shop';
   const node = currentNode(run, runCfg);
   if (!node) return 'prep';
   if (node.kind === 'shop' || node.kind === 'bossShop') return 'shop';
@@ -904,7 +907,7 @@ function applyRunBattleResult(): void {
       ? `勝利。コイン +${res.coinsGained}`
       : res.gameOver
         ? 'ライフが尽きた……'
-        : `ライフ -1 ／ コイン +${res.coinsGained} ／ 同じ相手に再挑戦`;
+        : `ライフ -1 ／ コイン +${res.coinsGained} ／ ショップへ`;
     retry = res.retry;
   }
   autoSave();
@@ -1684,7 +1687,8 @@ function renderResultScreen(main: HTMLElement): void {
   for (const line of info?.lines ?? []) block.appendChild(h('div', 'screen-text', line));
   panel.appendChild(block);
   if (run) panel.appendChild(runHeader(run));
-  panel.appendChild(btn(info?.retry ? '再挑戦' : '次へ', false, afterResult, 'next-btn'));
+  const label = info?.retry ? (run?.shop?.retry ? 'ショップへ' : '再挑戦') : '次へ';
+  panel.appendChild(btn(label, false, afterResult, 'next-btn'));
   main.appendChild(panel);
 }
 
@@ -1758,8 +1762,17 @@ function renderShopScreen(main: HTMLElement): void {
   const shop = run.shop!;
   const panel = h('div', 'screen-panel shop-screen');
   panel.appendChild(
-    h('div', 'screen-title', shop.boss ? 'ボスショップ' : 'リザルト ＆ ショップ'),
+    h(
+      'div',
+      'screen-title',
+      shop.retry ? '立て直しのショップ' : shop.boss ? 'ボスショップ' : 'リザルト ＆ ショップ',
+    ),
   );
+  if (shop.retry) {
+    panel.appendChild(
+      h('div', 'hint', '敗北のあとの特例です。買い物のあと、同じ戦闘に再挑戦します'),
+    );
+  }
   panel.appendChild(runHeader(run));
   if (state.runMessage) panel.appendChild(h('div', 'hint', state.runMessage));
 
@@ -1812,7 +1825,21 @@ function renderShopScreen(main: HTMLElement): void {
   rb.disabled = run.coins < shop.rerollCost;
   row.appendChild(rb);
   row.appendChild(
-    btn('次へ進む', true, () => {
+    btn(shop.retry ? '戦闘へ戻る' : '次へ進む', true, () => {
+      if (shop.retry) {
+        // 特例ショップはノードを進めない。同じ戦闘へ再挑戦する
+        closeRetryShop(run);
+        autoSave();
+        state.runMessage = '';
+        const node = currentNode(run, runCfg);
+        showResult(
+          'neutral',
+          '立て直し完了',
+          [node ? `同じ「${NODE_LABEL[node.kind]}」に再挑戦する` : ''],
+          true,
+        );
+        return;
+      }
       advanceNode(run, runCfg);
       autoSave();
       state.runMessage = '';

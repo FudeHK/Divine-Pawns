@@ -117,7 +117,7 @@ export const DEFAULT_RUN_CONFIG: RunConfig = {
 
   eventSlotRewardChance: 0.25,
 
-  chapterScale: { 1: 0.5, 2: 2.3, 3: 3.8 },
+  chapterScale: { 1: 0.7, 2: 3.6, 3: 6.2 },
   bossScale: { 1: 1.35, 2: 1.35, 3: 1.35 },
 };
 

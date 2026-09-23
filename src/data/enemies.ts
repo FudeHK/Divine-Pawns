@@ -225,6 +225,120 @@ const raw: EnemyDef[] = [
       },
     ],
   },
+  // 2章ボス：凍てつく霧の女王（仮）。凍傷を重ねて味方の手数を奪う
+  {
+    id: 'boss_rime',
+    name: '氷霧の女王（仮）',
+    shortName: '氷霧の',
+    role: 'mage',
+    element: 'ice',
+    base: st({ maxHp: 2600, atk: 74, def: 32, atkSpeed: 0.7, range: 3, moveSpeed: 1.2 }),
+    resist: 0.5,
+    isBoss: true,
+    active: {
+      id: 'boss_rime_active',
+      name: '氷霧の帳',
+      summary: '敵全体に凍傷を重ね、ダメージを与える',
+      trigger: { kind: 'onSkill' },
+      effects: [
+        { kind: 'damage', target: 'allEnemies', amount: { stat: 'atk', coef: 0.9 } },
+        { kind: 'applyDebuff', target: 'allEnemies', debuff: 'frostbite', stacks: 4 },
+      ],
+    },
+    passives: [
+      {
+        id: 'boss_rime_chill',
+        name: '絶えぬ吹雪',
+        summary: '一定間隔で最も密集した列を凍てつかせる',
+        trigger: { kind: 'everyN', seconds: 6 },
+        effects: [
+          { kind: 'applyDebuff', target: 'enemyDensestRow', debuff: 'frostbite', stacks: 3 },
+          { kind: 'damage', target: 'enemyDensestRow', amount: { stat: 'atk', coef: 0.8 } },
+        ],
+      },
+      {
+        id: 'boss_rime_focus',
+        name: '氷刃',
+        summary: '攻撃した相手に凍傷を重ねる',
+        trigger: { kind: 'onAttack' },
+        effects: [{ kind: 'applyDebuff', target: 'current', debuff: 'frostbite', stacks: 1 }],
+      },
+    ],
+  },
+  // 3章ボス：最終章。HPが減るほど手が変わる
+  {
+    id: 'boss_eclipse',
+    name: '蝕の王（仮）',
+    shortName: '蝕の',
+    role: 'melee',
+    element: 'lightning',
+    base: st({ maxHp: 4200, atk: 92, def: 48, atkSpeed: 0.75, range: 1, moveSpeed: 1.6 }),
+    resist: 0.6,
+    isBoss: true,
+    active: {
+      id: 'boss_eclipse_active',
+      name: '雷撃の断罪',
+      summary: '対象の周囲に大ダメージと麻痺を与える',
+      trigger: { kind: 'onSkill' },
+      effects: [
+        {
+          kind: 'damage',
+          target: 'enemiesAroundTarget',
+          radius: 1,
+          amount: { stat: 'atk', coef: 1.5 },
+        },
+        {
+          kind: 'applyDebuff',
+          target: 'enemiesAroundTarget',
+          radius: 1,
+          debuff: 'paralysis',
+          stacks: 4,
+        },
+      ],
+    },
+    passives: [
+      {
+        id: 'boss_eclipse_open',
+        name: '蝕の宣告',
+        summary: '開幕に敵の最後列を撃つ',
+        trigger: { kind: 'battleStart' },
+        effects: [
+          { kind: 'damage', target: 'allEnemies', amount: { stat: 'atk', coef: 0.8 } },
+          { kind: 'applyDebuff', target: 'allEnemies', debuff: 'paralysis', stacks: 2 },
+        ],
+      },
+      {
+        id: 'boss_eclipse_storm',
+        name: '雷の檻',
+        summary: '一定間隔で敵全体に雷を落とす',
+        trigger: { kind: 'everyN', seconds: 8 },
+        effects: [
+          { kind: 'damage', target: 'allEnemies', amount: { stat: 'atk', coef: 0.9 } },
+          { kind: 'applyDebuff', target: 'allEnemies', debuff: 'paralysis', stacks: 2 },
+        ],
+      },
+      {
+        id: 'boss_eclipse_rage',
+        name: '第二相・暴走',
+        summary: 'HPが半分を切ると攻撃力と攻撃速度が上がる',
+        trigger: { kind: 'hpBelow', pct: 50 },
+        effects: [
+          { kind: 'statMod', target: 'self', stat: 'atk', mode: 'pct', value: 0.35 },
+          { kind: 'statMod', target: 'self', stat: 'atkSpeed', mode: 'pct', value: 0.3 },
+        ],
+      },
+      {
+        id: 'boss_eclipse_last',
+        name: '第三相・断末',
+        summary: '瀕死になると全体に強烈な雷を落とす',
+        trigger: { kind: 'hpBelow', pct: 20 },
+        effects: [
+          { kind: 'damage', target: 'allEnemies', amount: { stat: 'atk', coef: 1.6 } },
+          { kind: 'applyDebuff', target: 'allEnemies', debuff: 'paralysis', stacks: 5 },
+        ],
+      },
+    ],
+  },
 ];
 
 export const ENEMIES: readonly EnemyDef[] = validateAll(zEnemyDef, raw, 'ENEMIES');

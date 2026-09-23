@@ -18,6 +18,7 @@ import {
   boardHeight,
   boardRenderedHeight,
   boardVerticalSlack,
+  mainHeight,
   tabBodyHeight,
   teamCardHeight,
   teamTabContentHeight,
@@ -164,7 +165,7 @@ describe('B6 下部バーの高さは固定', () => {
 // ---------------------------------------------------------------------------
 
 describe('盤面の上下に余白が出ない', () => {
-  it('盤面の入れ物は伸びない（余った高さは下部バーが吸う）', () => {
+  it('メイン画面は固定サイズで、盤面はその中に縦横比を保って収まる', () => {
     const decls = new Map(
       ruleBody('.board-area')
         .split(';')
@@ -172,11 +173,13 @@ describe('盤面の上下に余白が出ない', () => {
         .filter((kv) => kv.length >= 2)
         .map((kv) => [kv[0]!.trim(), kv.slice(1).join(':').trim()]),
     );
-    expect(decls.get('flex')).toBe('0 1 auto');
-    expect(decls.get('align-items')).toBe('stretch');
-    // 盤面自体は縦横比で高さが決まる（レターボックスの余白が出ない）
+    expect(decls.get('flex')).toBe('0 0 var(--main-h)');
+    for (const prop of ['height', 'min-height', 'max-height']) {
+      expect(decls.get(prop), prop).toBe('var(--main-h)');
+    }
+    expect(cssVar('--main-h')).toBe(`${LAYOUT.mainHeight}px`);
     expect(ruleBody('.board')).toContain('aspect-ratio');
-    expect(ruleBody('.board')).not.toContain('max-height');
+    expect(ruleBody('.board')).toContain('height: 100%');
   });
 
   it.each([...TEST_VIEWPORTS])('%ix%i で盤面の上下余白が 0', (vw, vh) => {
@@ -209,5 +212,50 @@ describe('盤面の上下に余白が出ない', () => {
     const after = LAYOUT.appPadding * 2 + LAYOUT.appGap * 2 + LAYOUT.headerHeight;
     expect(after).toBeLessThan(before);
     expect(before - after).toBeGreaterThanOrEqual(12);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.8: メイン画面のサイズは screenMode でも画面サイズでも変わらない
+// ---------------------------------------------------------------------------
+
+describe('メイン画面のサイズ固定', () => {
+  const MODES = ['prep', 'battle', 'result', 'shop', 'event', 'nodeTransition', 'title'] as const;
+
+  it('固定高さは 1つの定数で決まる', () => {
+    expect(mainHeight()).toBe(LAYOUT.mainHeight);
+    // 盤面が潰れない高さは確保している
+    expect(mainHeight()).toBeGreaterThanOrEqual(LAYOUT.boardMinHeight);
+  });
+
+  it.each([...TEST_VIEWPORTS])('%ix%i でも固定高さは同じ', (_vw, _vh) => {
+    expect(mainHeight()).toBe(LAYOUT.mainHeight);
+  });
+
+  it('screenMode が変わっても CSS の高さ指定は 1種類だけ', () => {
+    // 盤面以外の画面に高さの上書きが無いこと（中身は内部スクロールで吸収する）
+    for (const mode of MODES) {
+      const sel = `.board-area[data-screen='${mode}']`;
+      let body: string | null = null;
+      try {
+        body = ruleBody(sel);
+      } catch {
+        body = null;
+      }
+      if (body === null) continue;
+      expect(body, mode).not.toContain('height');
+      expect(body, mode).toContain('overflow-y: auto');
+    }
+  });
+
+  it.each([...TEST_VIEWPORTS])('%ix%i で メイン＋ヘッダー＋バー が画面に収まる', (vw, vh) => {
+    const total =
+      LAYOUT.appPadding * 2 +
+      LAYOUT.headerHeight +
+      LAYOUT.appGap * 2 +
+      mainHeight() +
+      barHeightAt(vw, vh);
+    expect(total).toBeLessThanOrEqual(vh);
+    expect(barHeightAt(vw, vh)).toBeGreaterThanOrEqual(LAYOUT.barHeight);
   });
 });
