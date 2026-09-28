@@ -12,6 +12,7 @@ import { BLESSINGS, getBlessing } from '../src/data/blessings';
 import { CHARACTERS } from '../src/data/characters';
 import { getEncounter } from '../src/data/encounters';
 import { getEnemy } from '../src/data/enemies';
+import { PALETTE } from '../src/ui/palette';
 import { applyBattleResult, chapterNodes, createRun, prepareNode } from '../src/game/run';
 import { saveRun } from '../src/game/save';
 import type { RunState } from '../src/game/types';
@@ -305,7 +306,7 @@ describe('A2 キャラを1体ずつ表示する', () => {
 // ---------------------------------------------------------------------------
 
 describe('A3 表示中キャラの盤面ハイライト', () => {
-  const FOCUS = '#ff7ae0';
+  const FOCUS = PALETTE.focus;
 
   function focusRing(): Element | null {
     return app().querySelector('svg.board .focus-ring');

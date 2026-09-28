@@ -18,6 +18,8 @@ import { getEnemy } from '../data/enemies';
 import { EQUIPMENT, getEquipment } from '../data/equipment';
 import { getEvent } from '../data/events';
 import { buildBattleSetup, resolveMembers } from '../engine/build';
+import { PALETTE } from './palette';
+import { portraitSvg } from './portrait';
 import { DEFAULT_CONFIG } from '../engine/config';
 import { ALLY_CELLS, ALL_CELLS, isCellOfSide } from '../engine/hex';
 import { equipmentSlots } from '../engine/stats';
@@ -225,10 +227,10 @@ const DEBUFF_FULL: Record<DebuffKind, string> = {
   paralysis: '麻痺',
 };
 const DEBUFF_COLOR: Record<DebuffKind, string> = {
-  burn: '#ff7a45',
-  frostbite: '#6fd2ff',
-  poison: '#7ed957',
-  paralysis: '#d29bff',
+  burn: PALETTE.fire,
+  frostbite: PALETTE.ice,
+  poison: PALETTE.wood,
+  paralysis: PALETTE.lightning,
 };
 const DEBUFF_ORDER: DebuffKind[] = ['burn', 'frostbite', 'poison', 'paralysis'];
 const RARITY_LABEL: Record<Rarity, string> = {
@@ -444,7 +446,7 @@ const R = (BOARD_W - 4) / (SQ3 * 5.5);
 export const BOARD_H = 1.5 * R * 5 + 2 * R + 4;
 
 /** 「編成」タブで表示中のキャラを示す色（戦闘中の表示とは別色） */
-const FOCUS_COLOR = '#ff7ae0';
+const FOCUS_COLOR = PALETTE.focus;
 
 /** 盤面アイコンの表示名。4文字で収まらない時だけ12pxまで縮める */
 function labelFontSize(label: string): number {
@@ -489,6 +491,8 @@ function drawToken(
     /** 「編成」タブで表示中のキャラ */
     focused?: boolean;
     onTap?: () => void;
+    /** SD立ち絵を重ねるキャラID（味方だけ） */
+    portraitCharId?: string;
   } = {},
 ): void {
   const g = el('g');
@@ -506,6 +510,17 @@ function drawToken(
     );
   }
   g.appendChild(el('circle', { cx, cy, r: R * 0.74, fill: color, opacity: 0.94 }));
+  // 味方キャラはSD立ち絵を小さく重ねる（誰がどこにいるか一目で分かるように）
+  if (opts.portraitCharId) {
+    const size = R * 1.3;
+    const art = portraitSvg(opts.portraitCharId, { star: opts.star ?? 1, background: false });
+    art.setAttribute('x', String(cx - size / 2));
+    art.setAttribute('y', String(cy - size / 2 - R * 0.12));
+    art.setAttribute('width', String(size));
+    art.setAttribute('height', String(size));
+    art.setAttribute('class', 'token-portrait');
+    g.appendChild(art);
+  }
   g.appendChild(
     el(
       'text',
@@ -515,7 +530,7 @@ function drawToken(
         'text-anchor': 'middle',
         'font-size': labelFontSize(label),
         'font-weight': 700,
-        fill: '#0b1119',
+        fill: PALETTE.text,
       },
       label,
     ),
@@ -524,7 +539,7 @@ function drawToken(
     g.appendChild(
       el(
         'text',
-        { x: cx, y: cy + 20, 'text-anchor': 'middle', 'font-size': 12, fill: '#0b1119' },
+        { x: cx, y: cy + 20, 'text-anchor': 'middle', 'font-size': 12, fill: PALETTE.text },
         `★${opts.star}`,
       ),
     );
@@ -532,7 +547,7 @@ function drawToken(
   if (opts.dupIndex) {
     const nx = cx + R * 0.58;
     const ny = cy + R * 0.58;
-    g.appendChild(el('circle', { cx: nx, cy: ny, r: 9, fill: '#0b1119', opacity: 0.92 }));
+    g.appendChild(el('circle', { cx: nx, cy: ny, r: 9, fill: PALETTE.text, opacity: 0.92 }));
     g.appendChild(
       el(
         'text',
@@ -542,7 +557,7 @@ function drawToken(
           'text-anchor': 'middle',
           'font-size': 12,
           'font-weight': 700,
-          fill: '#ffffff',
+          fill: PALETTE.textOnDark,
         },
         String(opts.dupIndex),
       ),
@@ -568,8 +583,8 @@ function renderBoard(): SVGSVGElement {
     const placing = !rep && focus !== null && focus.slot === 'frontline' && isAlly;
     const p = el('polygon', {
       points: hexPoints(cx, cy, R * 0.95),
-      fill: isAlly ? (placing ? '#1d3149' : '#182231') : '#291a1d',
-      stroke: placing ? '#ffcc52' : occ && !rep ? '#ffcc52' : '#3a3f52',
+      fill: isAlly ? PALETTE.cellAlly : PALETTE.cellEnemy,
+      stroke: placing || (occ && !rep) ? PALETTE.accentPeachDeep : PALETTE.cellLine,
       'stroke-width': placing ? 2 : 1.5,
     });
     // 置ける状態（前衛のカードを表示中）の時だけ、マスをタップできる
@@ -601,7 +616,8 @@ function renderBoard(): SVGSVGElement {
       if (m.slot !== 'frontline' || !m.pos) continue;
       const { cx, cy } = hexCenter(m.pos);
       const cell = m.pos;
-      drawToken(svg, cx, cy, getCharacter(m.charId).shortName, '#4aa3ff', {
+      drawToken(svg, cx, cy, getCharacter(m.charId).shortName, PALETTE.ally, {
+        portraitCharId: m.charId,
         star: m.star,
         focused: focus ? m.key === focus.key : false,
         onTap: () => onCellTap(cell),
@@ -610,7 +626,7 @@ function renderBoard(): SVGSVGElement {
     const dup = enemyDupIndexes();
     getEncounter(activeEncounterId()).units.forEach((eu, i) => {
       const { cx, cy } = hexCenter(eu.pos);
-      drawToken(svg, cx, cy, getEnemy(eu.enemyId).shortName, '#ff6b6b', {
+      drawToken(svg, cx, cy, getEnemy(eu.enemyId).shortName, PALETTE.enemy, {
         dupIndex: dup[i] ?? null,
         onTap: () => openSheet({ kind: 'detail', target: { kind: 'enemySlot', index: i } }),
       });
@@ -623,7 +639,7 @@ function renderBoard(): SVGSVGElement {
     const u = byId.get(uf.id)!;
     if (!u.onField || !uf.alive) continue;
     const { cx, cy } = hexCenter(uf.pos);
-    drawToken(svg, cx, cy, shortNameOf(u.defId), u.side === 'ally' ? '#4aa3ff' : '#ff6b6b', {
+    drawToken(svg, cx, cy, shortNameOf(u.defId), u.side === 'ally' ? PALETTE.ally : PALETTE.enemy, {
       star: u.side === 'ally' ? u.star : null,
       dupIndex: u.dupIndex,
       onTap: () => openSheet({ kind: 'detail', target: { kind: 'unit', unitId: u.id } }),
@@ -633,27 +649,27 @@ function renderBoard(): SVGSVGElement {
     const bx = cx - bw / 2;
     const by = cy - R * 0.98;
     const hpRatio = Math.max(0, Math.min(1, uf.hp / u.maxHp));
-    svg.appendChild(el('rect', { x: bx, y: by, width: bw, height: 6, fill: '#000', opacity: 0.6, rx: 2 }));
+    svg.appendChild(el('rect', { x: bx, y: by, width: bw, height: 6, fill: PALETTE.text, opacity: 0.35, rx: 2 }));
     svg.appendChild(
       el('rect', {
         x: bx,
         y: by,
         width: bw * hpRatio,
         height: 6,
-        fill: u.side === 'ally' ? '#57d9a3' : '#ff8f6b',
+        fill: u.side === 'ally' ? PALETTE.ok : PALETTE.danger,
         rx: 2,
       }),
     );
     if (uf.shield > 0) {
       const sr = Math.min(1, uf.shield / u.maxHp);
       svg.appendChild(
-        el('rect', { x: bx, y: by, width: bw * sr, height: 6, fill: '#e6edf7', opacity: 0.85, rx: 2 }),
+        el('rect', { x: bx, y: by, width: bw * sr, height: 6, fill: PALETTE.panel, opacity: 0.9, rx: 2 }),
       );
     }
     const manaRatio = Math.max(0, Math.min(1, uf.mana / u.maxMana));
-    svg.appendChild(el('rect', { x: bx, y: by + 7, width: bw, height: 4, fill: '#000', opacity: 0.6, rx: 2 }));
+    svg.appendChild(el('rect', { x: bx, y: by + 7, width: bw, height: 4, fill: PALETTE.text, opacity: 0.35, rx: 2 }));
     svg.appendChild(
-      el('rect', { x: bx, y: by + 7, width: bw * manaRatio, height: 4, fill: '#7fb6ff', rx: 2 }),
+      el('rect', { x: bx, y: by + 7, width: bw * manaRatio, height: 4, fill: PALETTE.ally, rx: 2 }),
     );
 
     let dx = bx;
@@ -690,7 +706,7 @@ function renderBoard(): SVGSVGElement {
           'text-anchor': 'middle',
           'font-size': 16,
           'font-weight': 700,
-          fill: ev.type === 'heal' ? '#57d9a3' : '#ffe08a',
+          fill: ev.type === 'heal' ? PALETTE.ok : PALETTE.coin,
           stroke: '#000',
           'stroke-width': 1.2,
           'paint-order': 'stroke',
@@ -1087,6 +1103,9 @@ interface DetailView {
   /** 装備スロット（★の数だけ。空きは ''） */
   equipment: string[];
   skills: SkillRow[];
+  /** SD立ち絵を出すキャラID（味方だけ） */
+  charId?: string;
+  star?: number;
 }
 
 function statRows(s: Stats, hpNow: number | null, manaNow: number | null): [string, string][] {
@@ -1184,6 +1203,8 @@ function buildDetailView(target: DetailTarget): DetailView | null {
       rows: statRows(memberStats(m), null, null),
       equipment: m.equipment,
       skills: memberSkillRows(m),
+      charId: c.id,
+      star: m.star,
     };
   }
 
@@ -1238,6 +1259,8 @@ function buildDetailView(target: DetailTarget): DetailView | null {
     ],
     equipment: [],
     skills: c ? enemyOrMemberSkills(u.defId) : e ? enemySkills(e) : [],
+    charId: c ? c.id : undefined,
+    star: u.star,
   };
 }
 
@@ -1422,6 +1445,11 @@ function renderTeamTab(body: HTMLElement): void {
   );
 
   // 1行目: 名前・属性・役割・ID・★（タップ対象ではないので低い）
+  // カードの左側にSD立ち絵（プレースホルダー）
+  const art = portraitSvg(m.charId, { star: m.star });
+  art.classList.add('card-portrait');
+  card.appendChild(art);
+
   // 1行目: 名前だけ（長い名前は「…」で切らず、1段小さくして収める）
   const head = h('div', 'char-head');
   const nameEl = h('div', 'char-name' + (c.name.length >= 11 ? ' long' : ''), c.name);
@@ -2255,6 +2283,12 @@ function renderDetailSheet(
   const { wrap, body } = sheetShell(view.title, { depth, isTop });
   body.classList.add('detail');
   body.querySelector('.sheet-title')!.classList.add('detail-title');
+
+  if (view.charId) {
+    const big = portraitSvg(view.charId, { star: view.star ?? 1 });
+    big.classList.add('detail-portrait');
+    body.appendChild(big);
+  }
 
   body.appendChild(h('div', 'char-id', view.id));
 

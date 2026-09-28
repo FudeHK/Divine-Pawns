@@ -1,0 +1,64 @@
+/*
+ * テーマカラー（パステル基調のライトテーマ）。
+ *
+ * 起点にする3色
+ *   メイン #eaebad（明るい黄緑〜クリーム）
+ *   サブ1  #ebcdad（ピーチ）
+ *   サブ2  #cbebad（黄緑）
+ *
+ * ここが色の唯一の定義場所。個別のコンポーネントで色を直書きしない。
+ * TypeScript 側（SVG の盤面・立ち絵）は src/ui/palette.ts の同じ値を使い、
+ * tests/theme.test.ts が両者のズレとコントラスト比を見張る。
+ */
+
+:root {
+  /* --- ベース（メインカラーの明度違いで階層を作る） --- */
+  --main: #eaebad;
+  --bg: #eaebad;
+  --panel: #f4f5d2;
+  --panel2: #dfe09d;
+  --line: #b6b77a;
+
+  /* --- アクセント（サブ1・サブ2） --- */
+  --accent-peach: #ebcdad;
+  --accent-green: #cbebad;
+  --accent-peach-deep: #95602b;
+  --accent-green-deep: #4c7a2a;
+  /* 既存コードの互換用（強調＝コインの金色） */
+  --accent: #a35c04;
+
+  /* --- 文字 --- */
+  --text: #2a2416;
+  --muted: #5d5636;
+  --text-on-dark: #f7f8e6;
+
+  /* --- 属性 --- */
+  --fire: #bf3a12;
+  --ice: #116f9e;
+  --wood: #357220;
+  --lightning: #6b3fb5;
+
+  /* --- レア度（★・装備ティア）。灰 → 銅 → 金 --- */
+  --rarity-1: #6a6c73;
+  --rarity-2: #8f4f1d;
+  --rarity-3: #786000;
+
+  /* --- 状態 --- */
+  --life: #c81e2c;
+  --coin: #a35c04;
+  --ok: #2b7449;
+  --danger: #b5261c;
+  --ally: #245f9e;
+  --enemy: #b5261c;
+  --focus: #c22a8f;
+
+  /* --- 盤面 --- */
+  --board-bg: #f4f5d2;
+  --cell-ally: #dfe9c6;
+  --cell-enemy: #f0d9cf;
+  --cell-line: #b6b77a;
+
+  /* --- 影（パステル地の上なので薄めに） --- */
+  --shadow-1: 0 1px 2px rgba(42, 36, 22, 0.14);
+  --shadow-2: 0 2px 8px rgba(42, 36, 22, 0.18);
+}

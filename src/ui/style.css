@@ -1,5 +1,7 @@
+@import './theme.css';
+
 /*
- * 検証用画面のスタイル。
+ * 画面のスタイル。
  * 文字サイズとタップ領域は CSS 変数で一元管理する。
  * 本文16px以上・補足14px以上・見出し18px以上・タップ領域44px以上。
  * 12px を使ってよいのは ID の表示（.char-id / .mono-id）だけ。
@@ -19,30 +21,30 @@
   --tap: 44px;
   --gap: 8px;
 
-  /* 配色（ダークテーマ） */
-  --bg: #12131a;
-  --panel: #1c1e28;
-  --panel2: #242737;
-  --line: #333849;
-  --text: #e8eaf2;
-  --muted: #9aa1b8;
-  --ally: #4aa3ff;
-  --enemy: #ff6b6b;
-  --accent: #ffcc52;
-  --ok: #57d9a3;
-  --fire: #ff7a45;
-  --ice: #6fd2ff;
-  --wood: #7ed957;
-  --lightning: #d29bff;
+  /* 配色は theme.css（パステル基調のライトテーマ）に集約した */
 
   /* 下部バーの高さ（src/ui/layout.ts の barHeight と同じ値にする） */
   --bar-h-fixed: 320px;
   /* 盤面が潰れないための最小の高さ */
   --board-min: 140px;
-  /* メイン画面の固定高さ（src/ui/layout.ts の mainHeight と同じ値にする） */
-  --main-h: 300px;
-  /* ライフ（ハート）の色。暗い背景でも見えるよう鮮やかな赤にする */
-  --life: #ff4757;
+  /* #app の最大幅（src/ui/layout.ts の APP_MAX_WIDTH と同じ値にする） */
+  --app-max-w: 560px;
+  /* #app の左右・上下の余白（src/ui/layout.ts の appPadding と同じ値にする） */
+  --app-pad: 4px;
+  /* 盤面の縦横比（360 / 359 ＝ ほぼ 1）。--main-h の計算に使う */
+  --board-aspect: 1.0028;
+  /*
+   * メイン画面の高さ。
+   * 「横幅いっぱいに広げた盤面の高さ」と「下部バーを確保した残り」の小さい方。
+   * src/ui/layout.ts の mainHeight() と同じ式にする。
+   */
+  --main-h: max(
+    var(--board-min),
+    min(
+      calc((min(100vw, var(--app-max-w)) - var(--app-pad) * 2) / var(--board-aspect)),
+      calc(100vh - var(--app-pad) * 2 - 26px - 4px - var(--bar-h-fixed))
+    )
+  );
 }
 
 * {
@@ -54,7 +56,7 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: #0b0c11;
+  background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
   font-size: var(--font-body);
@@ -63,12 +65,14 @@ body {
 }
 
 #app {
-  max-width: 430px;
+  /* スマホでは画面幅いっぱい。広い画面でだけ頭打ちにする */
+  width: 100%;
+  max-width: var(--app-max-w);
   min-width: 320px;
   margin: 0 auto;
   height: 100vh;
   background: var(--bg);
-  padding: 4px;
+  padding: var(--app-pad);
   overflow-x: hidden;
   overflow-y: hidden;
   display: flex;
@@ -152,7 +156,7 @@ button:active {
 
 button.on {
   background: var(--accent);
-  color: #1a1206;
+  color: var(--text);
   border-color: var(--accent);
   font-weight: 700;
 }
@@ -314,12 +318,14 @@ select {
 /* --- 盤面 --- */
 
 .board {
-  width: auto;
+  /* 横幅にフィットさせる（縦横比は保つ）。高さは --main-h で頭打ちになる */
+  width: 100%;
   height: 100%;
   max-width: 100%;
+  object-fit: contain;
   aspect-ratio: 360 / 359;
   display: block;
-  background: #0e0f16;
+  background: var(--board-bg);
   border: 1px solid var(--line);
   border-radius: 10px;
   touch-action: manipulation;
@@ -377,7 +383,7 @@ select {
   height: 160px;
   overflow-y: auto;
   overflow-x: auto;
-  background: #0e0f16;
+  background: var(--board-bg);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: var(--gap);
@@ -768,7 +774,7 @@ select {
   font-size: var(--font-sub);
   padding: 2px 6px;
   border-radius: 8px;
-  background: #11131c;
+  background: var(--panel);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -843,7 +849,7 @@ select {
 }
 
 .run-node.current {
-  color: #1a1206;
+  color: var(--text);
   background: var(--accent);
   border-color: var(--accent);
   font-weight: 700;
@@ -1025,7 +1031,7 @@ select {
   padding: 1px 6px;
   border-radius: 6px;
   background: var(--accent);
-  color: #1a1206;
+  color: var(--text);
   font-size: var(--font-sub);
   font-weight: 700;
 }
@@ -1222,4 +1228,45 @@ select {
 .run-status .coin-text {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* --- SD立ち絵（プレースホルダー） --- */
+
+.portrait {
+  display: block;
+}
+
+/* キャラカードの左に置く小さい立ち絵 */
+.card-portrait {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  pointer-events: none;
+  opacity: 0.98;
+}
+
+.char {
+  position: relative;
+}
+
+/* 立ち絵とかぶらないよう、カードの文字は右側を空ける */
+.char-head,
+.char-tags {
+  padding-right: 60px;
+}
+
+/* 詳細ポップアップの大きい立ち絵 */
+.detail-portrait {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+  border-radius: 14px;
+}
+
+/* 盤面のコマに重ねる立ち絵 */
+.token-portrait {
+  pointer-events: none;
 }

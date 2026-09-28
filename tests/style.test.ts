@@ -162,6 +162,6 @@ describe('横スクロール', () => {
     expect(body.get('overflow-x')).toBe('hidden');
     const appRule = new Map(declarations(ruleFor('#app')!.body));
     expect(appRule.get('overflow-x')).toBe('hidden');
-    expect(appRule.get('max-width')).toBe('430px');
+    expect(appRule.get('max-width')).toBe('var(--app-max-w)');
   });
 });

@@ -16,9 +16,13 @@ import {
   barHeightAt,
   boardAreaWidth,
   boardHeight,
+  boardHorizontalSlack,
   boardRenderedHeight,
+  boardRenderedWidth,
   boardVerticalSlack,
   mainHeight,
+  APP_MAX_WIDTH,
+  TEST_VIEWPORT_WIDTHS,
   tabBodyHeight,
   teamCardHeight,
   teamTabContentHeight,
@@ -99,7 +103,8 @@ describe('キャラカードが縦スクロールなしに収まる', () => {
 
 describe('フェーズ2.5: 盤面まわりの余白を詰めてバーに回した', () => {
   it('#app の余白と隙間が CSS と同じ', () => {
-    expect(pxOf('#app', 'padding')).toBe(LAYOUT.appPadding);
+    expect(cssVar('--app-pad')).toBe(`${LAYOUT.appPadding}px`);
+    expect(ruleBody('#app')).toContain('padding: var(--app-pad)');
     expect(pxOf('#app', 'gap')).toBe(LAYOUT.appGap);
   });
 
@@ -165,7 +170,7 @@ describe('B6 下部バーの高さは固定', () => {
 // ---------------------------------------------------------------------------
 
 describe('盤面の上下に余白が出ない', () => {
-  it('メイン画面は固定サイズで、盤面はその中に縦横比を保って収まる', () => {
+  it('メイン画面は --main-h だけで決まり、盤面は縦横比を保って収まる', () => {
     const decls = new Map(
       ruleBody('.board-area')
         .split(';')
@@ -177,9 +182,14 @@ describe('盤面の上下に余白が出ない', () => {
     for (const prop of ['height', 'min-height', 'max-height']) {
       expect(decls.get(prop), prop).toBe('var(--main-h)');
     }
-    expect(cssVar('--main-h')).toBe(`${LAYOUT.mainHeight}px`);
+    // --main-h は「横幅から決まる高さ」と「バーを確保した残り」の小さい方
+    const mh = cssVar('--main-h') ?? '';
+    expect(mh).toContain('min(');
+    expect(mh).toContain('var(--app-max-w)');
+    expect(mh).toContain('var(--bar-h-fixed)');
+    expect(cssVar('--app-max-w')).toBe(`${APP_MAX_WIDTH}px`);
     expect(ruleBody('.board')).toContain('aspect-ratio');
-    expect(ruleBody('.board')).toContain('height: 100%');
+    expect(ruleBody('.board')).toContain('width: 100%');
   });
 
   it.each([...TEST_VIEWPORTS])('%ix%i で盤面の上下余白が 0', (vw, vh) => {
@@ -222,14 +232,18 @@ describe('盤面の上下に余白が出ない', () => {
 describe('メイン画面のサイズ固定', () => {
   const MODES = ['prep', 'battle', 'result', 'shop', 'event', 'nodeTransition', 'title'] as const;
 
-  it('固定高さは 1つの定数で決まる', () => {
-    expect(mainHeight()).toBe(LAYOUT.mainHeight);
-    // 盤面が潰れない高さは確保している
-    expect(mainHeight()).toBeGreaterThanOrEqual(LAYOUT.boardMinHeight);
+  it('高さは下限を下回らない', () => {
+    for (const [vw, vh] of TEST_VIEWPORTS) {
+      expect(mainHeight(vw, vh)).toBeGreaterThanOrEqual(LAYOUT.boardMinHeight);
+    }
   });
 
-  it.each([...TEST_VIEWPORTS])('%ix%i でも固定高さは同じ', (_vw, _vh) => {
-    expect(mainHeight()).toBe(LAYOUT.mainHeight);
+  it.each([...TEST_VIEWPORTS])('%ix%i では screenMode によらず同じ高さ', (vw, vh) => {
+    // 画面サイズごとに1つに決まる（呼ぶたびに同じ値）
+    const a = mainHeight(vw, vh);
+    const b = mainHeight(vw, vh);
+    expect(a).toBe(b);
+    expect(boardRenderedHeight(vw, vh)).toBe(a);
   });
 
   it('screenMode が変わっても CSS の高さ指定は 1種類だけ', () => {
@@ -257,5 +271,52 @@ describe('メイン画面のサイズ固定', () => {
       barHeightAt(vw, vh);
     expect(total).toBeLessThanOrEqual(vh);
     expect(barHeightAt(vw, vh)).toBeGreaterThanOrEqual(LAYOUT.barHeight);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// フェーズ2.9: メイン画面は画面幅にフィットする
+// ---------------------------------------------------------------------------
+
+describe('メイン画面の横幅フィット', () => {
+  it('#app は画面幅いっぱい（広い画面だけ上限で止める）', () => {
+    const body = ruleBody('#app');
+    expect(body).toContain('width: 100%');
+    expect(body).toContain('max-width: var(--app-max-w)');
+    expect(cssVar('--app-max-w')).toBe(`${APP_MAX_WIDTH}px`);
+    expect(APP_MAX_WIDTH).toBeGreaterThanOrEqual(500);
+    expect(APP_MAX_WIDTH).toBeLessThanOrEqual(600);
+  });
+
+  it.each([...TEST_VIEWPORT_WIDTHS])('幅 %ipx（縦長の画面）で盤面が横幅いっぱいに広がる', (vw) => {
+    const vh = 844;
+    expect(boardRenderedWidth(vw, vh)).toBeCloseTo(boardAreaWidth(vw), 0);
+    expect(boardHorizontalSlack(vw, vh)).toBeLessThanOrEqual(1);
+    expect(boardVerticalSlack(vw, vh)).toBe(0);
+  });
+
+  it.each([...TEST_VIEWPORT_WIDTHS])('幅 %ipx（低い画面）でも左右の余白は小さい', (vw) => {
+    const vh = 667;
+    // 高さが足りない時だけ、盤面は高さに合わせて縮む（それでも左右の余白は横幅の15%以内）
+    expect(boardHorizontalSlack(vw, vh)).toBeLessThan(boardAreaWidth(vw) * 0.15);
+    expect(boardRenderedWidth(vw, vh)).toBeLessThanOrEqual(boardAreaWidth(vw) + 0.5);
+  });
+
+  it('画面が広くても上限で止まる（間延びしない）', () => {
+    expect(boardAreaWidth(1200)).toBe(APP_MAX_WIDTH - LAYOUT.appPadding * 2);
+    expect(boardRenderedWidth(1200, 1000)).toBeLessThanOrEqual(APP_MAX_WIDTH);
+  });
+
+  it.each([...TEST_VIEWPORT_WIDTHS])('幅 %ipx で下部バーの最小高さを侵さない', (vw) => {
+    for (const vh of [667, 844, 926]) {
+      const total =
+        LAYOUT.appPadding * 2 +
+        LAYOUT.headerHeight +
+        LAYOUT.appGap * 2 +
+        mainHeight(vw, vh) +
+        barHeightAt(vw, vh);
+      expect(Math.round(total), `${vw}x${vh}`).toBeLessThanOrEqual(vh);
+      expect(barHeightAt(vw, vh)).toBeGreaterThanOrEqual(LAYOUT.barHeight);
+    }
   });
 });

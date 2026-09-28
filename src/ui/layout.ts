@@ -28,9 +28,9 @@ export const LAYOUT = {
   /** 盤面が潰れないための最小の高さ */
   boardMinHeight: 140,
   /**
-   * メイン画面（盤面・リザルト・ショップ・イベント共通）の固定高さ。
-   * いちばん狭い想定画面（375×667）で余白を詰めたときの盤面の高さを基準にする。
-   * screenMode が変わっても、画面サイズが変わっても、ここは動かさない。
+   * メイン画面の高さの下限（これ以上は縮めない）。
+   * 実際の高さは「横幅いっぱいに広げた盤面の高さ」と「下部バーを確保した残り」の小さい方。
+   * screenMode が変わっても動かない（画面サイズごとに1つに決まる）。
    */
   mainHeight: 300,
 
@@ -92,8 +92,11 @@ const SQ3 = Math.sqrt(3);
 const BOARD_R = (360 - 4) / (SQ3 * 5.5);
 export const BOARD_ASPECT = 360 / (1.5 * BOARD_R * 5 + 2 * BOARD_R + 4);
 
-/** #app の最大幅（style.css の #app max-width と同じ） */
-export const APP_MAX_WIDTH = 430;
+/**
+ * #app の最大幅（style.css の --app-max-w と同じ）。
+ * スマホでは画面幅いっぱい。タブレットやPCで間延びしないようにここで頭打ちにする。
+ */
+export const APP_MAX_WIDTH = 560;
 
 /** 盤面の入れ物に使える横幅 */
 export function boardAreaWidth(viewportWidth: number): number {
@@ -112,36 +115,55 @@ export function boardHeight(viewportHeight: number): number {
 }
 
 /**
- * メイン画面の高さ。screenMode にも画面サイズにもよらず固定。
+ * メイン画面の高さ。
+ * 「横幅いっぱいに広げた盤面の高さ」と「下部バーを確保した残り」の小さい方。
+ * screenMode では変わらない（画面サイズごとに1つに決まる）。
  */
-export function mainHeight(): number {
-  return LAYOUT.mainHeight;
+export function mainHeight(viewportWidth = 375, viewportHeight = 667): number {
+  const byWidth = boardAreaWidth(viewportWidth) / BOARD_ASPECT;
+  const rest =
+    viewportHeight -
+    LAYOUT.appPadding * 2 -
+    LAYOUT.headerHeight -
+    LAYOUT.appGap * 2 -
+    LAYOUT.barHeight;
+  return Math.max(LAYOUT.boardMinHeight, Math.min(byWidth, rest));
 }
 
-/**
- * 実際に描かれる盤面の高さ。メイン画面の固定高さに収まる大きさになる。
- */
-export function boardRenderedHeight(viewportWidth: number, _viewportHeight = 0): number {
-  const byWidth = boardAreaWidth(viewportWidth) / BOARD_ASPECT;
-  return Math.min(byWidth, mainHeight());
+/** 実際に描かれる盤面の高さ（メイン画面の高さそのもの） */
+export function boardRenderedHeight(viewportWidth: number, viewportHeight = 667): number {
+  return mainHeight(viewportWidth, viewportHeight);
+}
+
+/** 実際に描かれる盤面の横幅（縦横比を保つので、高さから決まる） */
+export function boardRenderedWidth(viewportWidth: number, viewportHeight = 667): number {
+  return Math.min(
+    boardAreaWidth(viewportWidth),
+    boardRenderedHeight(viewportWidth, viewportHeight) * BOARD_ASPECT,
+  );
+}
+
+/** 盤面の左右に残る余白（片側） */
+export function boardHorizontalSlack(viewportWidth: number, viewportHeight = 667): number {
+  return (boardAreaWidth(viewportWidth) - boardRenderedWidth(viewportWidth, viewportHeight)) / 2;
 }
 
 /**
  * 盤面の上下に残る余白。
  * 盤面の入れ物は伸び縮みせず（flex: 0 0 auto）、余りは下部バーが吸うので 0 になる。
  */
-export function boardVerticalSlack(viewportWidth: number, _viewportHeight = 0): number {
-  return mainHeight() - boardRenderedHeight(viewportWidth);
+export function boardVerticalSlack(viewportWidth: number, viewportHeight = 667): number {
+  return mainHeight(viewportWidth, viewportHeight) - boardRenderedHeight(viewportWidth, viewportHeight);
 }
 
 /** 実際の下部バーの高さ（余った高さはバーが吸う。最小は LAYOUT.barHeight） */
-export function barHeightAt(_viewportWidth: number, viewportHeight: number): number {
+export function barHeightAt(viewportWidth: number, viewportHeight: number): number {
   const rest =
     viewportHeight -
     LAYOUT.appPadding * 2 -
     LAYOUT.headerHeight -
     LAYOUT.appGap * 2 -
-    mainHeight();
+    mainHeight(viewportWidth, viewportHeight);
   return Math.max(LAYOUT.barHeight, rest);
 }
 
@@ -154,3 +176,6 @@ export const TEST_VIEWPORTS = [
   [390, 844],
   [428, 926],
 ] as const;
+
+/** 横幅フィットの確認に使う画面幅 */
+export const TEST_VIEWPORT_WIDTHS = [360, 375, 390, 414, 428] as const;
